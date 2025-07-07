@@ -47,7 +47,7 @@ if uploaded_files:
 
             # Mostrar coordenadas y agregar al gráfico
             st.success(f"{label}: x = {xy[0]:.4f}, y = {xy[1]:.4f}")
-            ax.plot(xy[0], xy[1], 'o', label=label, markersize=10)
+            ax.plot(xy[0], xy[1], 'o', label=label, markersize=4)
 
         except Exception as e:
             st.error(f"❌ Error en el archivo {uploaded_file.name}: {e}")
