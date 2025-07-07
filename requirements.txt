@@ -1,0 +1,4 @@
+streamlit
+colour-science
+matplotlib
+pandas
