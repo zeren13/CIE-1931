@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import colour
 
-st.title("CIE 1931 - Coordenadas de Emisión PL")
+st.title("CIE 1931 - Coordenadas Cromatograficas")
 
-uploaded_file = st.file_uploader("Sube tu archivo de emisión (CSV separado por ';')", type=["csv"])
+uploaded_file = st.file_uploader("Sube tu archivo de Espectro de emisión (CSV separado por ';')", type=["csv"])
 
 if uploaded_file is not None:
     try:
@@ -42,7 +42,7 @@ if uploaded_file is not None:
 
         # Graficar
         fig, ax = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
-        ax.plot(xy[0], xy[1], 'o', color='black', markersize=10, label='Emisión PL')
+        ax.plot(xy[0], xy[1], 'o', color='black', markersize=4, label='Coordenada cromatografica')
         plt.xlabel("x-chromaticity coordinate")
         plt.ylabel("y-chromaticity coordinate")
         plt.title("CIE 1931 Chromaticity Diagram")
