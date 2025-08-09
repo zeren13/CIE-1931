@@ -23,6 +23,11 @@ wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=100
 interp_interval = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 5, 10], index=0)
 dpi_save = st.sidebar.number_input("DPI para exportar imagen TIFF", min_value=72, max_value=1200, value=600)
 
+# NUEVO: Campos para título y nombres de ejes
+plot_title = st.sidebar.text_input("Título del gráfico", value="Diagrama cromático CIE 1931")
+x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x")
+y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y")
+
 st.markdown("#### 1) Subir archivos")
 st.markdown("- **CSV** simples (varios): columnas `wavelength (nm)` y `intensity` (o 1ª y 2ª columnas).")
 st.markdown("- **XLSX** (varias hojas): selecciona la hoja para cada archivo.")
@@ -40,23 +45,17 @@ def read_csv_flexible(file_like):
             text = content.decode('utf-8', errors='replace')
         else:
             text = str(content)
-        # normalizar decimales: replace ',' decimal with '.' only when looks numeric (common pattern)
-        # We'll simply replace commas with dots in numbers by replacing all commas with dots:
-        # but first try to read with ';' as sep
         from io import StringIO
         test = StringIO(text.replace(',', '.'))
         df = pd.read_csv(test, sep=';')
         if df.shape[1] == 1:
-            # maybe comma separator
             test = StringIO(text.replace(',', '.'))
             df = pd.read_csv(test, sep=',')
-        # if still single column, try whitespace
         if df.shape[1] == 1:
             test = StringIO(text.replace(',', '.'))
             df = pd.read_csv(test, sep=r'\s+', engine='python')
         return df
     except Exception as e:
-        # fallbacks
         try:
             from io import StringIO
             df = pd.read_csv(StringIO(text), sep=None, engine='python')
@@ -65,15 +64,11 @@ def read_csv_flexible(file_like):
             raise e
 
 def preprocess_df(df):
-    # assume first two numeric columns are wavelength and intensity
-    # drop non-numeric rows
     df = df.copy()
     if df.shape[1] < 2:
         raise ValueError("El archivo no tiene al menos 2 columnas.")
-    # take first two columns
     df = df.iloc[:, :2]
     df.columns = ['wavelength', 'intensity']
-    # coerce numeric (replace comma decimals if any)
     df['wavelength'] = pd.to_numeric(df['wavelength'].astype(str).str.replace(',', '.'), errors='coerce')
     df['intensity'] = pd.to_numeric(df['intensity'].astype(str).str.replace(',', '.'), errors='coerce')
     df = df.dropna()
@@ -96,57 +91,44 @@ for wl in _locus_wls:
 _locus_xy = np.array(_locus_xy)
 
 def dominant_wavelength_from_xy(x, y):
-    # find nearest point on locus
     d = np.sqrt(( _locus_xy[:,0] - x)**2 + (_locus_xy[:,1] - y)**2)
     idx = np.argmin(d)
     return int(_locus_wls[idx])
 
 # Prepare plotting area
 fig, ax = plt.subplots(figsize=(7,7))
-# draw official chromaticity diagram background using colour plotting
-# colour.plotting returns a figure/axes, but to integrate with our ax we use it then clear its axes and copy image
 try:
-    # use colour's plotting to draw full diagram then reuse axes
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
-    # copy background image from ax_cie to our ax: use ax_cie as main plot
     ax.clear()
-    # draw using colour's function directly on our ax by calling it with standalone=False and letting it return.
-    # simpler: just call plotting and use the returned axes as our axes for output
-    plt.close(fig)  # close earlier fig
+    plt.close(fig)
     fig = fig_cie
     ax = ax_cie
 except Exception:
-    # fallback: simple axes labels
     ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.9)
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_title("CIE 1931 chromaticity diagram (approx)")
 
-# Lists to gather results
+# Aplicar título y etiquetas de ejes desde sidebar
+ax.set_title(plot_title)
+ax.set_xlabel(x_axis_label)
+ax.set_ylabel(y_axis_label)
+
 results = []
 
-# Function to process a dataset and plot
 def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local, interp_interval_local):
     df = preprocess_df(df)
-    # filter wavelength range first
     mask = (df['wavelength'] >= wl_min_local) & (df['wavelength'] <= wl_max_local)
     df = df.loc[mask]
     if df.empty:
         raise ValueError("No hay datos en el rango seleccionado.")
-    # Build spectral distribution dict
-    # interpolate to requested interval (1,5,10)
     sd = SpectralDistribution(dict(zip(df['wavelength'].values, df['intensity'].values)))
     sd_int = sd.copy().interpolate(SpectralShape(wl_min_local, wl_max_local, interp_interval_local))
     XYZ = sd_to_XYZ(sd_int, cmfs=_cmfs)
     xy = XYZ_to_xy(XYZ)
     x_val, y_val = float(xy[0]), float(xy[1])
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
-    # plot point
-    ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)  # scale size a bit
+    ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
-# ----------------- Process CSV files -----------------
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
@@ -160,7 +142,6 @@ if csv_files:
             wl_max_local = st.number_input(f"λ max (CSV {i})", min_value=200, max_value=10000, value=wl_max, key=f"csv_wlmax_{i}")
             interp_local = st.selectbox(f"Interpolation interval (CSV {i})", [1,5,10], index=0, key=f"csv_interp_{i}")
             try:
-                # need to re-read file since file-like was consumed initially
                 df_tmp = read_csv_flexible(file)
                 res = process_and_plot(df_tmp, label, color, marker, size, wl_min_local, wl_max_local, interp_local)
                 results.append(res)
@@ -168,7 +149,6 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
-# ----------------- Process XLSX files -----------------
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -194,9 +174,7 @@ if xlsx_files:
         except Exception as e:
             st.error(f"No se pudo leer {file.name} como Excel: {e}")
 
-# ----------------- Results and downloads -----------------
 if results:
-    # show legend and plot
     ax.legend(loc='best', fontsize='small')
     st.pyplot(fig)
 
@@ -204,12 +182,10 @@ if results:
     st.subheader("Tabla de coordenadas")
     st.dataframe(results_df)
 
-    # download CSV of table
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
     st.download_button("📥 Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
 
-    # download TIFF of figure
     img_buf = io.BytesIO()
     fig.savefig(img_buf, format='tiff', dpi=dpi_save)
     img_buf.seek(0)
