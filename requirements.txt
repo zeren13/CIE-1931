@@ -2,3 +2,4 @@ streamlit
 colour-science
 matplotlib
 pandas
+openpyxl
