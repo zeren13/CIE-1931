@@ -83,12 +83,16 @@ def preprocess_df(df):
 _locus_wls = np.arange(380, 781, 1)
 _locus_xy = []
 _cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
+
 for wl in _locus_wls:
-    sd_tmp = SpectralDistribution({wl: 1.0})
-    sd_int = sd_tmp.copy().interpolate(SpectralShape(380, 780, 1))
+    values = {w: 0.0 for w in _locus_wls}
+    values[wl] = 1.0
+    sd_tmp = SpectralDistribution(values)
+    sd_int = sd_tmp.interpolate(SpectralShape(380, 780, 1))
     XYZ_tmp = sd_to_XYZ(sd_int, cmfs=_cmfs)
     xy_tmp = XYZ_to_xy(XYZ_tmp)
     _locus_xy.append(xy_tmp)
+
 _locus_xy = np.array(_locus_xy)
 
 def dominant_wavelength_from_xy(x, y):
