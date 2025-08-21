@@ -23,10 +23,12 @@ wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=100
 interp_interval = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 5, 10], index=0)
 dpi_save = st.sidebar.number_input("DPI para exportar imagen TIFF", min_value=72, max_value=1200, value=600)
 
-# NUEVO: Campos para título y nombres de ejes
+# NUEVO: Campos para título, nombres y colores de ejes
 plot_title = st.sidebar.text_input("Título del gráfico", value="Diagrama cromático CIE 1931")
 x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x")
 y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y")
+title_color = st.sidebar.color_picker("Color del título", "#000000")
+axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
 
 st.markdown("#### 1) Subir archivos")
 st.markdown("- **CSV** simples (varios): columnas `wavelength (nm)` y `intensity` (o 1ª y 2ª columnas).")
@@ -40,7 +42,6 @@ def read_csv_flexible(file_like):
     """Lee CSV intentando ; o , y reemplazando coma decimal si hace falta."""
     try:
         content = file_like.read()
-        # si es bytes, decodificar
         if isinstance(content, (bytes, bytearray)):
             text = content.decode('utf-8', errors='replace')
         else:
@@ -74,7 +75,7 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-# Precompute locus (chromaticity curve) 380-780 nm at 1 nm for dominant wavelength lookup
+# Precompute locus (chromaticity curve)
 _locus_wls = np.arange(380, 781, 1)
 _locus_xy = []
 _cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
@@ -107,10 +108,12 @@ except Exception:
     ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.9)
 
-# Aplicar título y etiquetas de ejes desde sidebar
-ax.set_title(plot_title)
-ax.set_xlabel(x_axis_label)
-ax.set_ylabel(y_axis_label)
+# Aplicar título, etiquetas y colores desde sidebar
+ax.set_title(plot_title, color=title_color)
+ax.set_xlabel(x_axis_label, color=axes_color)
+ax.set_ylabel(y_axis_label, color=axes_color)
+ax.tick_params(axis='x', colors=axes_color)
+ax.tick_params(axis='y', colors=axes_color)
 
 results = []
 
@@ -129,11 +132,11 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
     ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
+# Procesar CSV
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
         with st.expander(f"Configurar: {file.name}", expanded=(i==0)):
-            st.markdown("Opciones para este archivo:")
             label = st.text_input(f"Label (CSV {i})", value=file.name, key=f"csv_label_{i}")
             color = st.color_picker(f"Color (CSV {i})", "#000000", key=f"csv_color_{i}")
             marker = st.selectbox(f"Marker (CSV {i})", options=['o','s','^','x','D','*','v'], index=0, key=f"csv_marker_{i}")
@@ -149,6 +152,7 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
+# Procesar XLSX
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -156,7 +160,6 @@ if xlsx_files:
             xls = pd.ExcelFile(file)
             for k, sheet_name in enumerate(xls.sheet_names):
                 with st.expander(f"{file.name} - hoja: {sheet_name}", expanded=(j==0 and k==0)):
-                    st.markdown("Opciones para esta hoja:")
                     label = st.text_input(f"Label ({file.name} - {sheet_name})", value=f"{file.name} - {sheet_name}", key=f"xlsx_label_{j}_{k}")
                     color = st.color_picker(f"Color ({file.name} - {sheet_name})", "#000000", key=f"xlsx_color_{j}_{k}")
                     marker = st.selectbox(f"Marker ({file.name} - {sheet_name})", options=['o','s','^','x','D','*','v'], index=0, key=f"xlsx_marker_{j}_{k}")
@@ -176,6 +179,7 @@ if xlsx_files:
 
 if results:
     ax.legend(loc='best', fontsize='small')
+    plt.tight_layout()  # 🔹 evita que se corten números y ejes
     st.pyplot(fig)
 
     results_df = pd.DataFrame(results)
