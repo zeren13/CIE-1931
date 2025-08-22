@@ -105,8 +105,8 @@ try:
     fig = fig_cie
     ax = ax_cie
 except Exception:
-    ax.set_xlim(0, 0.8)
-    ax.set_ylim(0, 0.9)
+    ax.set_xlim(-0.2, 0.8)
+    ax.set_ylim(-0.1, 0.9)
 
 # Aplicar título, etiquetas y colores desde sidebar
 ax.set_title(plot_title, color=title_color)
