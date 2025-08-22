@@ -97,7 +97,7 @@ def dominant_wavelength_from_xy(x, y):
     return int(_locus_wls[idx])
 
 # Prepare plotting area
-fig, ax = plt.subplots(figsize=(7,7))
+fig, ax = plt.subplots(figsize=(5,5))
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
     ax.clear()
@@ -105,8 +105,8 @@ try:
     fig = fig_cie
     ax = ax_cie
 except Exception:
-    ax.set_xlim(-0.2, 0.8)
-    ax.set_ylim(-0.1, 0.9)
+    ax.set_xlim(0, 0.8)
+    ax.set_ylim(0, 0.9)
 
 # Aplicar título, etiquetas y colores desde sidebar
 ax.set_title(plot_title, color=title_color)
