@@ -1,95 +1,125 @@
 # app.py
 import streamlit as st
 import pandas as pd
+import numpy as np
+import io
 import matplotlib.pyplot as plt
 import colour
 from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
+from colour import MSDS_CMFS
+from colour.colorimetry import SpectralShape
+import matplotlib
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 
-st.title("CIE 1931 - Multi Spectra Plotter")
+# ----------------- Sidebar -----------------
+st.sidebar.header("Opciones de visualización")
+interp_interval = st.sidebar.number_input(
+    "Intervalo de interpolación (nm)", min_value=1, max_value=10, value=1
+)
 
-# Sidebar config
-st.sidebar.header("Plot settings")
-plot_title = st.sidebar.text_input("Plot title", "CIE 1931 Chromaticity Diagram")
-x_axis_label = st.sidebar.text_input("X-axis label", "x")
-y_axis_label = st.sidebar.text_input("Y-axis label", "y")
-title_color = st.sidebar.color_picker("Title color", "#000000")
-axes_color = st.sidebar.color_picker("Axes color", "#000000")
+# Subida de archivos CSV
+st.sidebar.subheader("Subir archivos CSV (una hoja)")
+uploaded_csvs = st.sidebar.file_uploader(
+    "Selecciona uno o varios CSV",
+    type=["csv"],
+    accept_multiple_files=True,
+    key="csv",
+)
 
-# File upload
-st.sidebar.header("Upload your spectra")
-uploaded_csv = st.sidebar.file_uploader("Upload CSV (wavelength, intensity)", type=["csv"], accept_multiple_files=True)
-uploaded_xlsx = st.sidebar.file_uploader("Upload XLSX (multiple sheets allowed)", type=["xlsx"], accept_multiple_files=True)
+# Subida de archivos XLSX
+st.sidebar.subheader("Subir archivos XLSX (varias hojas)")
+uploaded_excels = st.sidebar.file_uploader(
+    "Selecciona uno o varios XLSX",
+    type=["xlsx"],
+    accept_multiple_files=True,
+    key="excel",
+)
 
-spectra = []
+# ----------------- Main -----------------
+st.title("Generador de coordenadas CIE 1931 (x, y)")
 
-# Procesar CSV
-if uploaded_csv:
-    for file in uploaded_csv:
-        df = pd.read_csv(file)
-        if len(df.columns) >= 2:
-            label = st.sidebar.text_input(f"Label for {file.name}", file.name)
-            spectra.append((df, label))
+# Configuración de gráfico
+graph_title = st.text_input("Título de la gráfica", "Diagrama CIE 1931")
+x_label = st.text_input("Nombre del eje X", "x")
+y_label = st.text_input("Nombre del eje Y", "y")
 
-# Procesar XLSX
-if uploaded_xlsx:
-    for file in uploaded_xlsx:
-        xls = pd.ExcelFile(file)
+# Crear figura
+fig, ax = plt.subplots(figsize=(8, 8))
+
+# Dibujar contorno del diagrama CIE 1931
+cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
+wavelengths = np.arange(380, 781, interp_interval)
+xy_coords = []
+
+for wl in wavelengths:
+    sd = SpectralDistribution({wl: 1.0}, name=f"{wl} nm")
+    sd.interpolate(SpectralShape(380, 780, interp_interval))
+    XYZ = sd_to_XYZ(sd, cmfs=cmfs)
+    xy = XYZ_to_xy(XYZ)
+    xy_coords.append(xy)
+
+xy_coords = np.array(xy_coords)
+ax.plot(xy_coords[:, 0], xy_coords[:, 1], color="black")
+ax.set_title(graph_title)
+ax.set_xlabel(x_label)
+ax.set_ylabel(y_label)
+ax.set_xlim(0, 0.8)
+ax.set_ylim(0, 0.9)
+
+# Etiquetar algunas longitudes de onda
+for i, wl in enumerate(wavelengths[::20]):
+    xy = xy_coords[::20][i]
+    ax.text(
+        xy[0],
+        xy[1],
+        str(wl),
+        fontsize=8,
+        ha="center",
+        va="center",
+    )
+
+# ----------------- Aquí está el FIX -----------------
+# Ajustar márgenes para que no se corten etiquetas
+fig.subplots_adjust(left=0.12, right=0.95, top=0.9, bottom=0.12)
+
+# Poner fondo blanco a los labels de longitudes de onda
+for txt in ax.texts:
+    txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.5))
+# ---------------------------------------------------
+
+# Procesar archivos CSV
+if uploaded_csvs:
+    for uploaded_file in uploaded_csvs:
+        df = pd.read_csv(uploaded_file)
+        if df.shape[1] >= 2:
+            wl = df.iloc[:, 0].to_numpy()
+            inten = df.iloc[:, 1].to_numpy()
+
+            sd = SpectralDistribution(dict(zip(wl, inten)))
+            sd.interpolate(SpectralShape(380, 780, interp_interval))
+            XYZ = sd_to_XYZ(sd, cmfs=cmfs)
+            xy = XYZ_to_xy(XYZ)
+
+            ax.plot(xy[0], xy[1], "o", label=uploaded_file.name)
+
+# Procesar archivos XLSX
+if uploaded_excels:
+    for uploaded_file in uploaded_excels:
+        xls = pd.ExcelFile(uploaded_file)
         for sheet_name in xls.sheet_names:
             df = xls.parse(sheet_name)
-            if len(df.columns) >= 2:
-                label = st.sidebar.text_input(f"Label for {file.name} - {sheet_name}", f"{file.name}-{sheet_name}")
-                spectra.append((df, label))
+            if df.shape[1] >= 2:
+                wl = df.iloc[:, 0].to_numpy()
+                inten = df.iloc[:, 1].to_numpy()
 
-# ----------------- Plot -----------------
-if spectra:
-    # Prepare plotting area
-    fig, ax = plt.subplots(figsize=(7,7))
-    try:
-        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(
-            standalone=False,
-            spectral_labels=True
-        )
-        ax.clear()
-        plt.close(fig)
-        fig = fig_cie
-        ax = ax_cie
-    except Exception:
-        ax.set_xlim(0, 0.8)
-        ax.set_ylim(0, 0.9)
+                sd = SpectralDistribution(dict(zip(wl, inten)))
+                sd.interpolate(SpectralShape(380, 780, interp_interval))
+                XYZ = sd_to_XYZ(sd, cmfs=cmfs)
+                xy = XYZ_to_xy(XYZ)
 
-    # Ajustar márgenes para que no se corten labels
-    fig.subplots_adjust(left=0.12, right=0.95, top=0.9, bottom=0.12)
+                ax.plot(xy[0], xy[1], "o", label=f"{uploaded_file.name}-{sheet_name}")
 
-    # Hacer visibles las etiquetas de longitudes de onda
-    for txt in ax.texts:
-        txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.5))
-
-    # Procesar espectros y calcular coordenadas
-    for df, label in spectra:
-        wl = df.iloc[:, 0].astype(float).values
-        inten = df.iloc[:, 1].astype(float).values
-        data = dict(zip(wl, inten))
-
-        try:
-            sd = SpectralDistribution(data, name=label)
-            XYZ = sd_to_XYZ(sd)
-            xy = XYZ_to_xy(XYZ)
-            ax.plot(xy[0], xy[1], 'o', label=label)
-            ax.text(xy[0]+0.01, xy[1]+0.01, label, fontsize=8, color="black")
-        except Exception as e:
-            st.error(f"Error processing {label}: {e}")
-
-    # Aplicar título y ejes personalizados
-    ax.set_title(plot_title, color=title_color)
-    ax.set_xlabel(x_axis_label, color=axes_color)
-    ax.set_ylabel(y_axis_label, color=axes_color)
-    ax.tick_params(axis='x', colors=axes_color)
-    ax.tick_params(axis='y', colors=axes_color)
-
-    ax.legend()
-    st.pyplot(fig)
-else:
-    st.info("Upload at least one CSV or XLSX file to plot.")
+ax.legend(fontsize=8)
+st.pyplot(fig)
