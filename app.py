@@ -1,81 +1,95 @@
 # app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import colour
-from colour import MSDS_CMFS, SpectralDistribution, sd_to_XYZ, XYZ_to_xy
+from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 
-# ----------------- App Title -----------------
-st.title("CIE 1931 Chromaticity Diagram - Multi Spectra")
+st.title("CIE 1931 - Multi Spectra Plotter")
 
-# ----------------- User Inputs -----------------
-x_label = st.text_input("X axis label:", value="x")
-y_label = st.text_input("Y axis label:", value="y")
-title = st.text_input("Graph title:", value="CIE 1931 Chromaticity Diagram")
+# Sidebar config
+st.sidebar.header("Plot settings")
+plot_title = st.sidebar.text_input("Plot title", "CIE 1931 Chromaticity Diagram")
+x_axis_label = st.sidebar.text_input("X-axis label", "x")
+y_axis_label = st.sidebar.text_input("Y-axis label", "y")
+title_color = st.sidebar.color_picker("Title color", "#000000")
+axes_color = st.sidebar.color_picker("Axes color", "#000000")
 
 # File upload
-uploaded_files = st.file_uploader("Upload CSV or XLSX files", type=["csv", "xlsx"], accept_multiple_files=True)
+st.sidebar.header("Upload your spectra")
+uploaded_csv = st.sidebar.file_uploader("Upload CSV (wavelength, intensity)", type=["csv"], accept_multiple_files=True)
+uploaded_xlsx = st.sidebar.file_uploader("Upload XLSX (multiple sheets allowed)", type=["xlsx"], accept_multiple_files=True)
 
-# ----------------- Function to process spectrum -----------------
-def process_spectrum(data):
-    data = data.dropna()
-    wavelengths = data.iloc[:, 0].values
-    intensities = data.iloc[:, 1].values
+spectra = []
 
-    # Create spectral distribution
-    sd = SpectralDistribution(dict(zip(wavelengths, intensities)))
-    sd = sd.copy().align(MSDS_CMFS["CIE 1931 2 Degree Standard Observer"].shape)
+# Procesar CSV
+if uploaded_csv:
+    for file in uploaded_csv:
+        df = pd.read_csv(file)
+        if len(df.columns) >= 2:
+            label = st.sidebar.text_input(f"Label for {file.name}", file.name)
+            spectra.append((df, label))
 
-    # Convert to XYZ and then xy
-    XYZ = sd_to_XYZ(sd, MSDS_CMFS["CIE 1931 2 Degree Standard Observer"])
-    xy = XYZ_to_xy(XYZ)
-    return xy
+# Procesar XLSX
+if uploaded_xlsx:
+    for file in uploaded_xlsx:
+        xls = pd.ExcelFile(file)
+        for sheet_name in xls.sheet_names:
+            df = xls.parse(sheet_name)
+            if len(df.columns) >= 2:
+                label = st.sidebar.text_input(f"Label for {file.name} - {sheet_name}", f"{file.name}-{sheet_name}")
+                spectra.append((df, label))
 
-# ----------------- Main -----------------
-if uploaded_files:
-    fig, ax = plt.subplots(figsize=(8, 8))
+# ----------------- Plot -----------------
+if spectra:
+    # Prepare plotting area
+    fig, ax = plt.subplots(figsize=(7,7))
+    try:
+        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(
+            standalone=False,
+            spectral_labels=True
+        )
+        ax.clear()
+        plt.close(fig)
+        fig = fig_cie
+        ax = ax_cie
+    except Exception:
+        ax.set_xlim(0, 0.8)
+        ax.set_ylim(0, 0.9)
 
-    # Draw chromaticity diagram background
-    cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
-    wl = np.arange(380, 781, 5)
-    XYZ = colour.wavelength_to_XYZ(wl, cmfs)
-    xy = XYZ_to_xy(XYZ)
+    # Ajustar márgenes para que no se corten labels
+    fig.subplots_adjust(left=0.12, right=0.95, top=0.9, bottom=0.12)
 
-    ax.plot(xy[..., 0], xy[..., 1], 'k-', linewidth=1)
-    ax.fill(xy[..., 0], xy[..., 1], facecolor="none", edgecolor="black")
+    # Hacer visibles las etiquetas de longitudes de onda
+    for txt in ax.texts:
+        txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.5))
 
-    # Plot labels with background for readability
-    for i, wavelength in enumerate(wl):
-        if wavelength % 20 == 0:
-            ax.text(
-                xy[i, 0], xy[i, 1], str(wavelength),
-                fontsize=9, color="black",
-                ha="center", va="center",
-                bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.2", alpha=0.7)
-            )
+    # Procesar espectros y calcular coordenadas
+    for df, label in spectra:
+        wl = df.iloc[:, 0].astype(float).values
+        inten = df.iloc[:, 1].astype(float).values
+        data = dict(zip(wl, inten))
 
-    # Plot user spectra
-    for file in uploaded_files:
-        if file.name.endswith(".csv"):
-            data = pd.read_csv(file)
-            xy_point = process_spectrum(data)
-            ax.plot(xy_point[0], xy_point[1], 'o', markersize=10, label=file.name)
-        elif file.name.endswith(".xlsx"):
-            xls = pd.ExcelFile(file)
-            for sheet_name in xls.sheet_names:
-                data = pd.read_excel(file, sheet_name=sheet_name)
-                xy_point = process_spectrum(data)
-                ax.plot(xy_point[0], xy_point[1], 'o', markersize=10, label=f"{file.name} - {sheet_name}")
+        try:
+            sd = SpectralDistribution(data, name=label)
+            XYZ = sd_to_XYZ(sd)
+            xy = XYZ_to_xy(XYZ)
+            ax.plot(xy[0], xy[1], 'o', label=label)
+            ax.text(xy[0]+0.01, xy[1]+0.01, label, fontsize=8, color="black")
+        except Exception as e:
+            st.error(f"Error processing {label}: {e}")
 
-    ax.set_xlim(0, 0.8)
-    ax.set_ylim(0, 0.9)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title(title)
-    ax.legend(loc="lower right")
+    # Aplicar título y ejes personalizados
+    ax.set_title(plot_title, color=title_color)
+    ax.set_xlabel(x_axis_label, color=axes_color)
+    ax.set_ylabel(y_axis_label, color=axes_color)
+    ax.tick_params(axis='x', colors=axes_color)
+    ax.tick_params(axis='y', colors=axes_color)
 
+    ax.legend()
     st.pyplot(fig)
+else:
+    st.info("Upload at least one CSV or XLSX file to plot.")
