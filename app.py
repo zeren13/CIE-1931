@@ -5,16 +5,19 @@ import numpy as np
 import io
 import matplotlib.pyplot as plt
 import colour
-from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy, wavelength_to_XYZ
+from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
 from colour import MSDS_CMFS
 from colour.colorimetry import SpectralShape
 import matplotlib
 
-# Para convertir XYZ a sRGB (compatibilidad entre versiones de colour)
+# Try to get an sRGB converter (robusto según versión de 'colour')
 try:
-    from colour.models import XYZ_to_sRGB
+    from colour.models import XYZ_to_sRGB  # newer versions
 except Exception:
-    from colour import XYZ_to_sRGB
+    try:
+        XYZ_to_sRGB = colour.XYZ_to_sRGB  # fallback
+    except Exception:
+        XYZ_to_sRGB = None
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
@@ -29,7 +32,7 @@ wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=100
 interp_interval = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 5, 10], index=0)
 dpi_save = st.sidebar.number_input("DPI para exportar imagen TIFF", min_value=72, max_value=1200, value=600)
 
-# NUEVO: Campos para título, nombres y colores de ejes
+# Campos para título, nombres y colores de ejes
 plot_title = st.sidebar.text_input("Título del gráfico", value="Diagrama cromático CIE 1931")
 x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x")
 y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y")
@@ -54,23 +57,28 @@ def read_csv_flexible(file_like):
             text = str(content)
         from io import StringIO
         test = StringIO(text.replace(',', '.'))
+        # probar separador ;
         df = pd.read_csv(test, sep=';')
         if df.shape[1] == 1:
+            # probar coma
             test = StringIO(text.replace(',', '.'))
             df = pd.read_csv(test, sep=',')
         if df.shape[1] == 1:
+            # probar whitespace
             test = StringIO(text.replace(',', '.'))
             df = pd.read_csv(test, sep=r'\s+', engine='python')
         return df
     except Exception as e:
+        # último intento automático
         try:
             from io import StringIO
             df = pd.read_csv(StringIO(text), sep=None, engine='python')
             return df
-        except Exception as e2:
+        except Exception:
             raise e
 
 def preprocess_df(df):
+    """Toma un df y devuelve con columnas 'wavelength' e 'intensity' numéricas."""
     df = df.copy()
     if df.shape[1] < 2:
         raise ValueError("El archivo no tiene al menos 2 columnas.")
@@ -81,74 +89,85 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-# Precompute locus (chromaticity curve)
-_locus_wls = np.arange(380, 781, 1)
+# ----------------- Precompute locus (chromaticity curve) y colores reales -----------------
+_locus_wls = np.arange(380, 781, 1)  # 380..780 nm step 1 for lookup
 _locus_xy = []
+_rgb_list = []
 _cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
 
+# Build locus and color for each wavelength robustly (avoid single-point domain issue)
 for wl in _locus_wls:
+    # build spectral distribution across full domain with 1 at wl
     values = {w: 0.0 for w in _locus_wls}
     values[wl] = 1.0
     sd_tmp = SpectralDistribution(values)
-    sd_int = sd_tmp.interpolate(SpectralShape(380, 780, 1))
-    XYZ_tmp = sd_to_XYZ(sd_int, cmfs=_cmfs)
+    # interpolate to uniform shape (1 nm)
+    sd_int = sd_tmp.copy().interpolate(SpectralShape(380, 780, 1))
+    XYZ_tmp = sd_to_XYZ(sd_int, cmfs=_cmfs)  # returns array [X,Y,Z]
     xy_tmp = XYZ_to_xy(XYZ_tmp)
     _locus_xy.append(xy_tmp)
+    # try to get a visible RGB color for this wavelength (best-effort)
+    if XYZ_to_sRGB is not None:
+        try:
+            # normalize XYZ to avoid extremely small values; scale by max to get color tone
+            max_xyz = np.max(XYZ_tmp)
+            if max_xyz > 0:
+                rgb = XYZ_to_sRGB(XYZ_tmp / max_xyz)
+            else:
+                rgb = XYZ_to_sRGB(XYZ_tmp + 1e-8)
+            rgb = np.asarray(rgb)
+            rgb = np.clip(rgb, 0.0, 1.0)
+        except Exception:
+            rgb = np.array([0.5, 0.5, 0.5])
+    else:
+        rgb = np.array([0.5, 0.5, 0.5])
+    _rgb_list.append(rgb)
 
 _locus_xy = np.array(_locus_xy)
+_rgb_list = np.array(_rgb_list)
 
 def dominant_wavelength_from_xy(x, y):
-    d = np.sqrt(( _locus_xy[:,0] - x)**2 + (_locus_xy[:,1] - y)**2)
+    """Find nearest wavelength from the precomputed locus (_locus_xy)."""
+    d = np.sqrt((_locus_xy[:, 0] - x)**2 + (_locus_xy[:, 1] - y)**2)
     idx = np.argmin(d)
     return int(_locus_wls[idx])
 
-# Prepare plotting area
+# ----------------- Prepare plotting area -----------------
 fig, ax = plt.subplots(figsize=(7,7))
+# Try using colour's built-in diagram background, but we'll overlay colors ourselves
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
-    ax.clear()
-    plt.close(fig)
+    # replace our fig/ax with the returned ones
+    plt.close(fig)  # close the placeholder
     fig = fig_cie
     ax = ax_cie
 except Exception:
     ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.9)
 
-# ======================== FIX: evitar que se corten los números ========================
-# 1) Márgenes más amplios para no cortar labels / ticks
-fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
-# 2) Asegurar que textos del diagrama no se recorten y sean legibles
-for txt in ax.texts:
-    txt.set_clip_on(False)
-    txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
-# 3) Por si acaso, evitar clipping también en los ticks
+# Overlay colored locus segments (draw on top)
+try:
+    for i in range(len(_locus_xy)-1):
+        x1, y1 = _locus_xy[i]
+        x2, y2 = _locus_xy[i+1]
+        ax.plot([x1, x2], [y1, y2], color=_rgb_list[i].tolist(), linewidth=2.0, solid_capstyle='round', zorder=3)
+except Exception:
+    # if rgb plotting fails, ignore and keep default diagram
+    pass
+
+# ----------------- FIX: evitar que se corten los números y textos -----------------
+# Aumentar márgenes
+fig.subplots_adjust(left=0.12, right=0.95, top=0.92, bottom=0.12)
+# Dar fondo blanco semitransparente a los textos del locus para legibilidad
+for txt in list(ax.texts):
+    try:
+        txt.set_clip_on(False)
+        txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.75, pad=1.2))
+    except Exception:
+        pass
+# Evitar clipping en ticks por si acaso
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
-# ======================================================================================
-
-# ======================== NUEVO: contorno con COLORES REALES ==========================
-try:
-    # Colores sRGB para cada longitud de onda 380–780 nm
-    rgb_list = []
-    for wl in _locus_wls:
-        XYZ_spec = wavelength_to_XYZ(wl)
-        rgb = np.asarray(XYZ_to_sRGB(XYZ_spec))
-        rgb = np.clip(rgb, 0, 1)  # limitar a [0,1] para matplotlib
-        rgb_list.append(rgb)
-
-    # Dibujar segmentos coloreados siguiendo el locus
-    for i in range(len(_locus_wls) - 1):
-        x1, y1 = _locus_xy[i]
-        x2, y2 = _locus_xy[i + 1]
-        ax.plot([x1, x2], [y1, y2],
-                color=rgb_list[i],
-                linewidth=2.0,
-                solid_capstyle='round',
-                zorder=3)
-except Exception:
-    # Si algo falla con la versión de 'colour', seguimos sin romper el app.
-    pass
-# ======================================================================================
 
 # Aplicar título, etiquetas y colores desde sidebar
 ax.set_title(plot_title, color=title_color)
@@ -157,28 +176,39 @@ ax.set_ylabel(y_axis_label, color=axes_color)
 ax.tick_params(axis='x', colors=axes_color)
 ax.tick_params(axis='y', colors=axes_color)
 
-results = []
+# ----------------- Results accumulation -----------------
+results = []  # list of dicts for dataframe
 
 def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local, interp_interval_local):
+    """Preprocess df, compute xy, plot on ax, return result dict."""
     df = preprocess_df(df)
     mask = (df['wavelength'] >= wl_min_local) & (df['wavelength'] <= wl_max_local)
     df = df.loc[mask]
     if df.empty:
         raise ValueError("No hay datos en el rango seleccionado.")
+    # Build spectral distribution from user data (wavelength:intensity)
     sd = SpectralDistribution(dict(zip(df['wavelength'].values, df['intensity'].values)))
+    # Interpolate to requested sampling
     sd_int = sd.copy().interpolate(SpectralShape(wl_min_local, wl_max_local, interp_interval_local))
     XYZ = sd_to_XYZ(sd_int, cmfs=_cmfs)
     xy = XYZ_to_xy(XYZ)
     x_val, y_val = float(xy[0]), float(xy[1])
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
-    ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)
+    # plot point on existing ax
+    ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label, zorder=10)
+    # add a small label next to point (black text with white bbox)
+    try:
+        ax.text(x_val + 0.008, y_val, label, fontsize=8, bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0), zorder=11)
+    except Exception:
+        pass
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
-# Procesar CSV
+# ----------------- Process CSV files -----------------
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
         with st.expander(f"Configurar: {file.name}", expanded=(i==0)):
+            st.markdown("Opciones para este archivo:")
             label = st.text_input(f"Label (CSV {i})", value=file.name, key=f"csv_label_{i}")
             color = st.color_picker(f"Color (CSV {i})", "#000000", key=f"csv_color_{i}")
             marker = st.selectbox(f"Marker (CSV {i})", options=['o','s','^','x','D','*','v'], index=0, key=f"csv_marker_{i}")
@@ -194,7 +224,7 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
-# Procesar XLSX
+# ----------------- Process XLSX files -----------------
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -202,6 +232,7 @@ if xlsx_files:
             xls = pd.ExcelFile(file)
             for k, sheet_name in enumerate(xls.sheet_names):
                 with st.expander(f"{file.name} - hoja: {sheet_name}", expanded=(j==0 and k==0)):
+                    st.markdown("Opciones para esta hoja:")
                     label = st.text_input(f"Label ({file.name} - {sheet_name})", value=f"{file.name} - {sheet_name}", key=f"xlsx_label_{j}_{k}")
                     color = st.color_picker(f"Color ({file.name} - {sheet_name})", "#000000", key=f"xlsx_color_{j}_{k}")
                     marker = st.selectbox(f"Marker ({file.name} - {sheet_name})", options=['o','s','^','x','D','*','v'], index=0, key=f"xlsx_marker_{j}_{k}")
@@ -219,7 +250,9 @@ if xlsx_files:
         except Exception as e:
             st.error(f"No se pudo leer {file.name} como Excel: {e}")
 
+# ----------------- Results and downloads -----------------
 if results:
+    # show legend and plot
     ax.legend(loc='best', fontsize='small')
     plt.tight_layout()  # evita que se corten números y ejes
     st.pyplot(fig)
@@ -228,14 +261,25 @@ if results:
     st.subheader("Tabla de coordenadas")
     st.dataframe(results_df)
 
+    # download CSV of table (fixed string)
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
-    # Exportar resultados como CSV
-csv_buf = io.StringIO()
-df_coords.to_csv(csv_buf, index=False)
-st.download_button(
-    "📥 Descargar tabla CSV",
-    data=csv_buf.getvalue(),
-    file_name="coordenadas_CIE1931.csv",
-    mime="text/csv"
-)
+    st.download_button(
+        "📥 Descargar tabla CSV",
+        data=csv_buf.getvalue(),
+        file_name="coordenadas_CIE1931.csv",
+        mime="text/csv"
+    )
+
+    # download TIFF of figure
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format='tiff', dpi=dpi_save)
+    img_buf.seek(0)
+    st.download_button(
+        "📥 Descargar diagrama TIFF (alta resolución)",
+        data=img_buf.getvalue(),
+        file_name="diagrama_CIE1931.tiff",
+        mime="image/tiff"
+    )
+else:
+    st.info("Aún no hay datasets procesados. Sube archivos CSV o XLSX y configura cada dataset.")
