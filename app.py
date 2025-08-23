@@ -30,8 +30,8 @@ y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y")
 title_color = st.sidebar.color_picker("Color del título", "#000000")
 axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
 
-# Nuevo: color del contorno del locus (un solo color)
-locus_color = st.sidebar.color_picker("Color del contorno del espectro (λ)", "#000000")
+# NUEVO: color para las ETIQUETAS de longitudes de onda (números λ)
+locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
 
 st.markdown("#### 1) Subir archivos")
 st.markdown("- **CSV** simples (varios): columnas `wavelength (nm)` y `intensity` (o 1ª y 2ª columnas).")
@@ -94,14 +94,6 @@ for wl in _locus_wls:
 
 _locus_xy = np.array(_locus_xy)
 
-# Dibujar contorno del locus usando el color elegido por el usuario
-try:
-    ax_dummy = plt.gca()  # ensure we have an axis if not yet created
-    # If real axes exist later, this plot will be overridden; we prefer to draw on the actual ax below.
-    # We'll just store _locus_xy and draw on the real ax later (safe no-op here).
-except Exception:
-    pass
-
 def dominant_wavelength_from_xy(x, y):
     d = np.sqrt(( _locus_xy[:,0] - x)**2 + (_locus_xy[:,1] - y)**2)
     idx = np.argmin(d)
@@ -119,19 +111,20 @@ except Exception:
     ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.9)
 
-# Dibujar contorno del locus con color elegido (sobre el diagrama)
-try:
-    ax.plot(_locus_xy[:, 0], _locus_xy[:, 1], color=locus_color, linewidth=2.0, zorder=2)
-except Exception:
-    pass
-
 # ======================== FIX: evitar que se corten los números ========================
 # 1) Márgenes más amplios para no cortar labels / ticks
 fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
+
 # 2) Asegurar que textos del diagrama no se recorten y sean legibles
-for txt in ax.texts:
-    txt.set_clip_on(False)
-    txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+#    -> aquí aplicamos también el color elegido para las etiquetas λ
+for txt in list(ax.texts):
+    try:
+        txt.set_clip_on(False)
+        txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+        txt.set_color(locus_label_color)  # <-- aplicamos el color de etiquetas λ
+    except Exception:
+        pass
+
 # 3) Por si acaso, evitar clipping también en los ticks
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
