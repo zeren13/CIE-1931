@@ -5,10 +5,16 @@ import numpy as np
 import io
 import matplotlib.pyplot as plt
 import colour
-from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
+from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy, wavelength_to_XYZ
 from colour import MSDS_CMFS
 from colour.colorimetry import SpectralShape
 import matplotlib
+
+# Para convertir XYZ a sRGB (compatibilidad entre versiones de colour)
+try:
+    from colour.models import XYZ_to_sRGB
+except Exception:
+    from colour import XYZ_to_sRGB
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
@@ -120,6 +126,30 @@ for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
 # ======================================================================================
 
+# ======================== NUEVO: contorno con COLORES REALES ==========================
+try:
+    # Colores sRGB para cada longitud de onda 380–780 nm
+    rgb_list = []
+    for wl in _locus_wls:
+        XYZ_spec = wavelength_to_XYZ(wl)
+        rgb = np.asarray(XYZ_to_sRGB(XYZ_spec))
+        rgb = np.clip(rgb, 0, 1)  # limitar a [0,1] para matplotlib
+        rgb_list.append(rgb)
+
+    # Dibujar segmentos coloreados siguiendo el locus
+    for i in range(len(_locus_wls) - 1):
+        x1, y1 = _locus_xy[i]
+        x2, y2 = _locus_xy[i + 1]
+        ax.plot([x1, x2], [y1, y2],
+                color=rgb_list[i],
+                linewidth=2.0,
+                solid_capstyle='round',
+                zorder=3)
+except Exception:
+    # Si algo falla con la versión de 'colour', seguimos sin romper el app.
+    pass
+# ======================================================================================
+
 # Aplicar título, etiquetas y colores desde sidebar
 ax.set_title(plot_title, color=title_color)
 ax.set_xlabel(x_axis_label, color=axes_color)
@@ -200,11 +230,4 @@ if results:
 
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
-    st.download_button("📥 Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
-
-    img_buf = io.BytesIO()
-    fig.savefig(img_buf, format='tiff', dpi=dpi_save)
-    img_buf.seek(0)
-    st.download_button("📥 Descargar diagrama TIFF (alta resolución)", data=img_buf.getvalue(), file_name="diagrama_CIE1931.tiff", mime="image/tiff")
-else:
-    st.info("Aún no hay datasets procesados. Sube archivos CSV o XLSX y configura cada dataset.")
+    st.download_button("📥 Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenad_
