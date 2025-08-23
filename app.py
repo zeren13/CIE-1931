@@ -230,4 +230,12 @@ if results:
 
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
-    st.download_button("📥 Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenad_
+    # Exportar resultados como CSV
+csv_buf = io.StringIO()
+df_coords.to_csv(csv_buf, index=False)
+st.download_button(
+    "📥 Descargar tabla CSV",
+    data=csv_buf.getvalue(),
+    file_name="coordenadas_CIE1931.csv",
+    mime="text/csv"
+)
