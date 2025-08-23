@@ -105,8 +105,13 @@ try:
     fig = fig_cie
     ax = ax_cie
 except Exception:
-    ax.set_xlim(0, 0.8)
-    ax.set_ylim(0, 0.9)
+    ax.set_xlim(-0.1, 1.1)
+    ax.set_ylim(-0.1, 1.1)
+
+# Opcional: poner líneas en el centro
+ax.axhline(0.5, color='gray', linewidth=0.8, linestyle='--')
+ax.axvline(0.5, color='gray', linewidth=0.8, linestyle='--')
+
 
 # ======================== FIX: evitar que se corten los números ========================
 # 1) Márgenes más amplios para no cortar labels / ticks
