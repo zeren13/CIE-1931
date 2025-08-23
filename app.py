@@ -105,20 +105,8 @@ try:
     fig = fig_cie
     ax = ax_cie
 except Exception:
-    ax.set_xlim(-0.5, 1.5)
-    ax.set_ylim(-0.5, 1.5)
-
-# ======================== FIX: evitar que se corten los números ========================
-# 1) Márgenes más amplios para no cortar labels / ticks
-fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
-# 2) Asegurar que textos del diagrama no se recorten y sean legibles
-for txt in ax.texts:
-    txt.set_clip_on(False)
-    txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
-# 3) Por si acaso, evitar clipping también en los ticks
-for lbl in ax.get_xticklabels() + ax.get_yticklabels():
-    lbl.set_clip_on(False)
-# ======================================================================================
+    ax.set_xlim(0, 0.8)
+    ax.set_ylim(0, 0.9)
 
 # Aplicar título, etiquetas y colores desde sidebar
 ax.set_title(plot_title, color=title_color)
@@ -126,6 +114,20 @@ ax.set_xlabel(x_axis_label, color=axes_color)
 ax.set_ylabel(y_axis_label, color=axes_color)
 ax.tick_params(axis='x', colors=axes_color)
 ax.tick_params(axis='y', colors=axes_color)
+
+# ======= NUEVO: centrar ejes en el medio del diagrama (0.5, 0.5) =======
+try:
+    ax.spines['left'].set_position(('data', 0.5))
+    ax.spines['bottom'].set_position(('data', 0.5))
+    ax.spines['right'].set_color('none')
+    ax.spines['top'].set_color('none')
+    ax.spines['left'].set_color(axes_color)
+    ax.spines['bottom'].set_color(axes_color)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+except Exception:
+    pass
+# ======================================================================
 
 results = []
 
@@ -191,7 +193,7 @@ if xlsx_files:
 
 if results:
     ax.legend(loc='best', fontsize='small')
-    plt.tight_layout()  # evita que se corten números y ejes
+    plt.tight_layout()  # 🔹 evita que se corten números y ejes
     st.pyplot(fig)
 
     results_df = pd.DataFrame(results)
