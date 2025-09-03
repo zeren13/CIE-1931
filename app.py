@@ -8,6 +8,7 @@ import colour
 from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
 from colour import MSDS_CMFS
 from colour.colorimetry import SpectralShape
+from matplotlib.font_manager import FontProperties
 import matplotlib
 
 # ----------------- Config -----------------
@@ -16,7 +17,7 @@ matplotlib.rcParams.update({'font.size': 12})
 
 st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión (múltiples archivos)")
 
-# Sidebar params
+# ----------------- Sidebar params -----------------
 st.sidebar.header("Parámetros globales")
 wl_min = st.sidebar.number_input("λ mínimo (nm)", min_value=200, max_value=10000, value=380)
 wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=10000, value=780)
@@ -31,7 +32,7 @@ title_color = st.sidebar.color_picker("Color del título", "#000000")
 axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
 
 # =================== NUEVAS OPCIONES (añadidas) ===================
-# Fuentes y tamaños
+# Fuentes y tamaños (para título, ticks y etiquetas λ)
 title_font_family = st.sidebar.selectbox("Fuente del título", options=["sans-serif", "serif", "monospace"], index=0)
 title_font_size = st.sidebar.number_input("Tamaño fuente título", min_value=8, max_value=48, value=14)
 
@@ -55,7 +56,7 @@ st.markdown("- **XLSX** (varias hojas): selecciona la hoja para cada archivo.")
 csv_files = st.file_uploader("Sube uno o varios archivos CSV", type=["csv"], accept_multiple_files=True)
 xlsx_files = st.file_uploader("Sube uno o varios archivos Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-# Helpers -----------------
+# ----------------- Helpers -----------------
 def read_csv_flexible(file_like):
     """Lee CSV intentando ; o , y reemplazando coma decimal si hace falta."""
     try:
@@ -93,7 +94,7 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-# Precompute locus (chromaticity curve)
+# ----------------- Precompute locus (chromaticity curve) -----------------
 _locus_wls = np.arange(380, 781, 1)
 _locus_xy = []
 _cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
@@ -114,7 +115,7 @@ def dominant_wavelength_from_xy(x, y):
     idx = np.argmin(d)
     return int(_locus_wls[idx])
 
-# Prepare plotting area
+# ----------------- Prepare plotting area -----------------
 fig, ax = plt.subplots(figsize=(7,7))
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
@@ -131,18 +132,11 @@ except Exception:
 fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
 
 # 2) Asegurar que textos del diagrama no se recorten y sean legibles
-#    -> aquí aplicamos también el color elegido para las etiquetas λ y la fuente/tamaño
+#    (aplicaremos fuente y color de forma fiable más abajo con FontProperties)
 for txt in list(ax.texts):
     try:
         txt.set_clip_on(False)
         txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
-        # aplicar color y fuente/tamaño si posible
-        try:
-            txt.set_color(locus_label_color)
-            txt.set_fontsize(locus_numbers_font_size)
-            txt.set_fontfamily(locus_numbers_font_family)
-        except Exception:
-            pass
     except Exception:
         pass
 
@@ -151,45 +145,85 @@ for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
 # ======================================================================================
 
-# Aplicar título, etiquetas y colores desde sidebar
-# Añadimos las propiedades de fuente y tamaño al título y a los labels de ejes
-try:
-    ax.set_title(plot_title, color=title_color, fontfamily=title_font_family, fontsize=title_font_size)
-except TypeError:
-    # compatibilidad si la versión de matplotlib no acepta fontfamily en set_title
-    ax.set_title(plot_title, color=title_color, fontsize=title_font_size)
+# ----------------- Aplicar título, etiquetas, fuentes, tamaños y grosor de ejes (BLOQUE COMPLETO) -----------------
+# Crear FontProperties a partir de las opciones de la sidebar
+fontprop_title = FontProperties(family=title_font_family, size=title_font_size)
+fontprop_ticks = FontProperties(family=tick_font_family, size=tick_font_size)
+fontprop_locus = FontProperties(family=locus_numbers_font_family, size=locus_numbers_font_size)
 
+# 1) Título: crear y aplicar FontProperties explícitamente
 try:
-    ax.set_xlabel(x_axis_label, color=axes_color, fontfamily=tick_font_family, fontsize=tick_font_size)
-    ax.set_ylabel(y_axis_label, color=axes_color, fontfamily=tick_font_family, fontsize=tick_font_size)
-except TypeError:
-    ax.set_xlabel(x_axis_label, color=axes_color, fontsize=tick_font_size)
-    ax.set_ylabel(y_axis_label, color=axes_color, fontsize=tick_font_size)
+    t = ax.set_title(plot_title, color=title_color)
+    t.set_fontproperties(fontprop_title)
+except Exception:
+    # fallback: intentar con kwargs si set_title falla
+    try:
+        ax.set_title(plot_title, color=title_color, fontsize=title_font_size)
+    except Exception:
+        pass
 
-# Ajustar ticks (fuente, tamaño y color)
+# 2) Etiquetas de ejes (xlabel/ylabel)
+try:
+    tx = ax.set_xlabel(x_axis_label, color=axes_color)
+    ty = ax.set_ylabel(y_axis_label, color=axes_color)
+    tx.set_fontproperties(fontprop_ticks)
+    ty.set_fontproperties(fontprop_ticks)
+except Exception:
+    ax.set_xlabel(x_axis_label, color=axes_color)
+    ax.set_ylabel(y_axis_label, color=axes_color)
+
+# 3) Ticks (números de ejes): aplicar FontProperties a cada label
 for lbl in ax.get_xticklabels():
     try:
-        lbl.set_fontsize(tick_font_size)
-        lbl.set_fontfamily(tick_font_family)
+        lbl.set_fontproperties(fontprop_ticks)
         lbl.set_color(axes_color)
         lbl.set_clip_on(False)
     except Exception:
-        pass
+        try:
+            lbl.set_fontsize(tick_font_size)
+            lbl.set_color(axes_color)
+        except Exception:
+            pass
+
 for lbl in ax.get_yticklabels():
     try:
-        lbl.set_fontsize(tick_font_size)
-        lbl.set_fontfamily(tick_font_family)
+        lbl.set_fontproperties(fontprop_ticks)
         lbl.set_color(axes_color)
         lbl.set_clip_on(False)
     except Exception:
-        pass
+        try:
+            lbl.set_fontsize(tick_font_size)
+            lbl.set_color(axes_color)
+        except Exception:
+            pass
 
-# Ajustar grosor de ejes (spines)
+# 4) Textos del locus (números λ): aplicar FontProperties y color de etiqueta
+for txt in list(ax.texts):
+    try:
+        txt.set_clip_on(False)
+        # asegurar caja de fondo (ya creada arriba), ahora aplicar fuente y color
+        txt.set_fontproperties(fontprop_locus)
+        txt.set_color(locus_label_color)
+    except Exception:
+        # fallback: intentar set_fontsize / set_color
+        try:
+            txt.set_fontsize(locus_numbers_font_size)
+            txt.set_color(locus_label_color)
+        except Exception:
+            pass
+
+# 5) Ajustar grosor de ejes (spines)
 try:
     for spine in ax.spines.values():
         spine.set_linewidth(axes_linewidth)
 except Exception:
     pass
+
+# Asegurar márgenes y evitar clipping (mantener tu ajuste)
+fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
+for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+    lbl.set_clip_on(False)
+# ----------------------------------------------------------------------------------------------------------------------
 
 results = []
 
@@ -214,7 +248,7 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
         pass
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
-# Procesar CSV
+# ----------------- Procesar CSV -----------------
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
@@ -234,7 +268,7 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
-# Procesar XLSX
+# ----------------- Procesar XLSX -----------------
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -259,6 +293,7 @@ if xlsx_files:
         except Exception as e:
             st.error(f"No se pudo leer {file.name} como Excel: {e}")
 
+# ----------------- Results and downloads -----------------
 if results:
     ax.legend(loc='best', fontsize='small')
     plt.tight_layout()  # evita que se corten números y ejes
