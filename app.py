@@ -49,6 +49,21 @@ axes_linewidth = st.sidebar.slider("Grosor de ejes (spines)", min_value=0.5, max
 # NUEVO: color para las ETIQUETAS de longitudes de onda (números λ)
 locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
 
+# NUEVAS OPCIONES: mostrar/ocultar etiquetas en puntos y leyenda
+show_point_labels = st.sidebar.checkbox("Mostrar etiquetas junto a cada punto", value=True)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Configuración de la leyenda (lista de archivos)")
+legend_loc = st.sidebar.selectbox("Ubicación de la leyenda", options=[
+    "best", "upper right", "upper left", "lower left", "lower right",
+    "right", "center left", "center right", "lower center", "upper center", "center"
+], index=0)
+legend_font_size = st.sidebar.number_input("Tamaño fuente leyenda", min_value=6, max_value=24, value=8)
+legend_ncols = st.sidebar.slider("Columnas de la leyenda", min_value=1, max_value=4, value=1)
+legend_box_color = st.sidebar.color_picker("Color fondo cuadro leyenda", "#FFFFFF")
+legend_box_alpha = st.sidebar.slider("Opacidad fondo leyenda", min_value=0.0, max_value=1.0, value=0.85)
+legend_box_linewidth = st.sidebar.slider("Grosor borde cuadro leyenda", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
+
 st.markdown("#### 1) Subir archivos")
 st.markdown("- **CSV** simples (varios): columnas `wavelength (nm)` y `intensity` (o 1ª y 2ª columnas).")
 st.markdown("- **XLSX** (varias hojas): selecciona la hoja para cada archivo.")
@@ -94,7 +109,7 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-# ----------------- Precompute locus (chromaticity curve) -----------------
+# Precompute locus (chromaticity curve)
 _locus_wls = np.arange(380, 781, 1)
 _locus_xy = []
 _cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
@@ -115,7 +130,7 @@ def dominant_wavelength_from_xy(x, y):
     idx = np.argmin(d)
     return int(_locus_wls[idx])
 
-# ----------------- Prepare plotting area -----------------
+# Prepare plotting area
 fig, ax = plt.subplots(figsize=(7,7))
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
@@ -127,42 +142,34 @@ except Exception:
     ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.9)
 
-# ======================== FIX: evitar que se corten los números ========================
-# 1) Márgenes más amplios para no cortar labels / ticks
+# FIX: evitar que se corten los números
 fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
-
-# 2) Asegurar que textos del diagrama no se recorten y sean legibles
-#    (aplicaremos fuente y color de forma fiable más abajo con FontProperties)
 for txt in list(ax.texts):
     try:
         txt.set_clip_on(False)
         txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
     except Exception:
         pass
-
-# 3) Por si acaso, evitar clipping también en los ticks
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
-# ======================================================================================
 
-# ----------------- Aplicar título, etiquetas, fuentes, tamaños y grosor de ejes (BLOQUE COMPLETO) -----------------
+# ----------------- Aplicar título, etiquetas, fuentes, tamaños y grosor de ejes -----------------
 # Crear FontProperties a partir de las opciones de la sidebar
 fontprop_title = FontProperties(family=title_font_family, size=title_font_size)
 fontprop_ticks = FontProperties(family=tick_font_family, size=tick_font_size)
 fontprop_locus = FontProperties(family=locus_numbers_font_family, size=locus_numbers_font_size)
 
-# 1) Título: crear y aplicar FontProperties explícitamente
+# Título
 try:
     t = ax.set_title(plot_title, color=title_color)
     t.set_fontproperties(fontprop_title)
 except Exception:
-    # fallback: intentar con kwargs si set_title falla
     try:
         ax.set_title(plot_title, color=title_color, fontsize=title_font_size)
     except Exception:
         pass
 
-# 2) Etiquetas de ejes (xlabel/ylabel)
+# Ejes (labels)
 try:
     tx = ax.set_xlabel(x_axis_label, color=axes_color)
     ty = ax.set_ylabel(y_axis_label, color=axes_color)
@@ -172,7 +179,7 @@ except Exception:
     ax.set_xlabel(x_axis_label, color=axes_color)
     ax.set_ylabel(y_axis_label, color=axes_color)
 
-# 3) Ticks (números de ejes): aplicar FontProperties a cada label
+# Ticks
 for lbl in ax.get_xticklabels():
     try:
         lbl.set_fontproperties(fontprop_ticks)
@@ -184,7 +191,6 @@ for lbl in ax.get_xticklabels():
             lbl.set_color(axes_color)
         except Exception:
             pass
-
 for lbl in ax.get_yticklabels():
     try:
         lbl.set_fontproperties(fontprop_ticks)
@@ -197,33 +203,25 @@ for lbl in ax.get_yticklabels():
         except Exception:
             pass
 
-# 4) Textos del locus (números λ): aplicar FontProperties y color de etiqueta
+# Textos del locus (números λ): aplicar fuente y color elegido
 for txt in list(ax.texts):
     try:
         txt.set_clip_on(False)
-        # asegurar caja de fondo (ya creada arriba), ahora aplicar fuente y color
         txt.set_fontproperties(fontprop_locus)
         txt.set_color(locus_label_color)
     except Exception:
-        # fallback: intentar set_fontsize / set_color
         try:
             txt.set_fontsize(locus_numbers_font_size)
             txt.set_color(locus_label_color)
         except Exception:
             pass
 
-# 5) Ajustar grosor de ejes (spines)
+# Grosor de ejes (spines)
 try:
     for spine in ax.spines.values():
         spine.set_linewidth(axes_linewidth)
 except Exception:
     pass
-
-# Asegurar márgenes y evitar clipping (mantener tu ajuste)
-fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
-for lbl in ax.get_xticklabels() + ax.get_yticklabels():
-    lbl.set_clip_on(False)
-# ----------------------------------------------------------------------------------------------------------------------
 
 results = []
 
@@ -240,15 +238,16 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
     x_val, y_val = float(xy[0]), float(xy[1])
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
     ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)
-    # si se añaden etiquetas a puntos, mantener fuente/tamaño de ticks para consistencia
-    try:
-        ax.text(x_val + 0.008, y_val, label, fontsize=tick_font_size, fontfamily=tick_font_family,
-                bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
-    except Exception:
-        pass
+    # Etiqueta opcional para cada punto
+    if show_point_labels:
+        try:
+            ax.text(x_val + 0.008, y_val, label, fontsize=tick_font_size, fontfamily=tick_font_family,
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+        except Exception:
+            pass
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
-# ----------------- Procesar CSV -----------------
+# Procesar CSV
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
@@ -268,7 +267,7 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
-# ----------------- Procesar XLSX -----------------
+# Procesar XLSX
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -293,10 +292,22 @@ if xlsx_files:
         except Exception as e:
             st.error(f"No se pudo leer {file.name} como Excel: {e}")
 
-# ----------------- Results and downloads -----------------
+# Results and downloads
 if results:
-    ax.legend(loc='best', fontsize='small')
-    plt.tight_layout()  # evita que se corten números y ejes
+    # Legend with custom size and box
+    try:
+        legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
+        frame = legend.get_frame()
+        frame.set_facecolor(legend_box_color)
+        frame.set_alpha(legend_box_alpha)
+        frame.set_linewidth(legend_box_linewidth)
+    except Exception:
+        try:
+            ax.legend(loc='best', fontsize=legend_font_size)
+        except Exception:
+            ax.legend(loc='best')
+
+    plt.tight_layout()
     st.pyplot(fig)
 
     results_df = pd.DataFrame(results)
