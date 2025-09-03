@@ -30,6 +30,21 @@ y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y")
 title_color = st.sidebar.color_picker("Color del título", "#000000")
 axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
 
+# =================== NUEVAS OPCIONES (añadidas) ===================
+# Fuentes y tamaños
+title_font_family = st.sidebar.selectbox("Fuente del título", options=["sans-serif", "serif", "monospace"], index=0)
+title_font_size = st.sidebar.number_input("Tamaño fuente título", min_value=8, max_value=48, value=14)
+
+tick_font_family = st.sidebar.selectbox("Fuente números de ejes (ticks)", options=["sans-serif", "serif", "monospace"], index=0)
+tick_font_size = st.sidebar.number_input("Tamaño números de ejes", min_value=6, max_value=24, value=10)
+
+locus_numbers_font_family = st.sidebar.selectbox("Fuente números λ (etiquetas locus)", options=["sans-serif", "serif", "monospace"], index=0)
+locus_numbers_font_size = st.sidebar.number_input("Tamaño números λ", min_value=6, max_value=24, value=8)
+
+# Grosor de ejes (spines)
+axes_linewidth = st.sidebar.slider("Grosor de ejes (spines)", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
+# =================================================================
+
 # NUEVO: color para las ETIQUETAS de longitudes de onda (números λ)
 locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
 
@@ -116,12 +131,18 @@ except Exception:
 fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.12)
 
 # 2) Asegurar que textos del diagrama no se recorten y sean legibles
-#    -> aquí aplicamos también el color elegido para las etiquetas λ
+#    -> aquí aplicamos también el color elegido para las etiquetas λ y la fuente/tamaño
 for txt in list(ax.texts):
     try:
         txt.set_clip_on(False)
         txt.set_bbox(dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
-        txt.set_color(locus_label_color)  # <-- aplicamos el color de etiquetas λ
+        # aplicar color y fuente/tamaño si posible
+        try:
+            txt.set_color(locus_label_color)
+            txt.set_fontsize(locus_numbers_font_size)
+            txt.set_fontfamily(locus_numbers_font_family)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -131,11 +152,44 @@ for lbl in ax.get_xticklabels() + ax.get_yticklabels():
 # ======================================================================================
 
 # Aplicar título, etiquetas y colores desde sidebar
-ax.set_title(plot_title, color=title_color)
-ax.set_xlabel(x_axis_label, color=axes_color)
-ax.set_ylabel(y_axis_label, color=axes_color)
-ax.tick_params(axis='x', colors=axes_color)
-ax.tick_params(axis='y', colors=axes_color)
+# Añadimos las propiedades de fuente y tamaño al título y a los labels de ejes
+try:
+    ax.set_title(plot_title, color=title_color, fontfamily=title_font_family, fontsize=title_font_size)
+except TypeError:
+    # compatibilidad si la versión de matplotlib no acepta fontfamily en set_title
+    ax.set_title(plot_title, color=title_color, fontsize=title_font_size)
+
+try:
+    ax.set_xlabel(x_axis_label, color=axes_color, fontfamily=tick_font_family, fontsize=tick_font_size)
+    ax.set_ylabel(y_axis_label, color=axes_color, fontfamily=tick_font_family, fontsize=tick_font_size)
+except TypeError:
+    ax.set_xlabel(x_axis_label, color=axes_color, fontsize=tick_font_size)
+    ax.set_ylabel(y_axis_label, color=axes_color, fontsize=tick_font_size)
+
+# Ajustar ticks (fuente, tamaño y color)
+for lbl in ax.get_xticklabels():
+    try:
+        lbl.set_fontsize(tick_font_size)
+        lbl.set_fontfamily(tick_font_family)
+        lbl.set_color(axes_color)
+        lbl.set_clip_on(False)
+    except Exception:
+        pass
+for lbl in ax.get_yticklabels():
+    try:
+        lbl.set_fontsize(tick_font_size)
+        lbl.set_fontfamily(tick_font_family)
+        lbl.set_color(axes_color)
+        lbl.set_clip_on(False)
+    except Exception:
+        pass
+
+# Ajustar grosor de ejes (spines)
+try:
+    for spine in ax.spines.values():
+        spine.set_linewidth(axes_linewidth)
+except Exception:
+    pass
 
 results = []
 
@@ -152,6 +206,12 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
     x_val, y_val = float(xy[0]), float(xy[1])
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
     ax.plot(x_val, y_val, marker=marker, color=color, markersize=size/10, linestyle='None', label=label)
+    # si se añaden etiquetas a puntos, mantener fuente/tamaño de ticks para consistencia
+    try:
+        ax.text(x_val + 0.008, y_val, label, fontsize=tick_font_size, fontfamily=tick_font_family,
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+    except Exception:
+        pass
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
 # Procesar CSV
