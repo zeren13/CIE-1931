@@ -21,7 +21,8 @@ except Exception:
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({'font.size': 12})
-HAS_DIALOG = hasattr(st, "dialog")
+DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
+HAS_DIALOG = callable(DIALOG_DECORATOR)
 
 st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión")
 
@@ -518,14 +519,19 @@ def render_cfg_form(ds, cfg):
 def open_config(ds):
     cfg = get_cfg(ds)
     title = f"Configurar: {ds['name']}"
+
+    # Streamlit >= 1.28 usa st.dialog como DECORADOR, no como context manager.
     if HAS_DIALOG:
-        with st.dialog(title):
+        @DIALOG_DECORATOR(title)
+        def _dlg():
             with st.form(key=f"form_{ds['id']}"):
                 new_cfg = render_cfg_form(ds, cfg)
                 submitted = st.form_submit_button("Guardar")
             if submitted:
                 st.session_state[f"cfg_{ds['id']}"] = new_cfg
                 st.success("Guardado")
+
+        _dlg()
     else:
         with st.expander(title, expanded=True):
             new_cfg = render_cfg_form(ds, cfg)
