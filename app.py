@@ -1,4 +1,3 @@
-
 # app.py
 import io
 import numpy as np
@@ -14,14 +13,11 @@ from colour.colorimetry import SpectralShape
 from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
 
 
-# ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({"font.size": 12})
-
 st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión (múltiples archivos)")
 
-
-# ----------------- Sidebar params -----------------
+# Sidebar params
 st.sidebar.header("Parámetros globales")
 wl_min = st.sidebar.number_input("λ mínimo (nm)", min_value=200, max_value=10000, value=380)
 wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=10000, value=780)
@@ -44,9 +40,7 @@ locus_numbers_font_family = st.sidebar.selectbox("Fuente números λ (etiquetas 
 locus_numbers_font_size = st.sidebar.number_input("Tamaño números λ", min_value=6, max_value=24, value=8)
 
 axes_linewidth = st.sidebar.slider("Grosor de ejes (spines)", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
-
 locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
-
 show_point_labels = st.sidebar.checkbox("Mostrar etiquetas junto a cada punto", value=True)
 
 st.sidebar.markdown("---")
@@ -65,8 +59,7 @@ legend_box_color = st.sidebar.color_picker("Color fondo cuadro leyenda", "#FFFFF
 legend_box_alpha = st.sidebar.slider("Opacidad fondo leyenda", min_value=0.0, max_value=1.0, value=0.85)
 legend_box_linewidth = st.sidebar.slider("Grosor borde cuadro leyenda", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
 
-
-# ----------------- Uploaders -----------------
+# Uploaders
 st.markdown("#### 1) Subir archivos")
 st.markdown("- CSV simples (varios): dos primeras columnas = λ e intensidad (separador ; o ,).")
 st.markdown("- XLSX (varias hojas): se procesan todas las hojas (si alguna no sirve, se reporta).")
@@ -75,9 +68,8 @@ csv_files = st.file_uploader("Sube uno o varios archivos CSV", type=["csv"], acc
 xlsx_files = st.file_uploader("Sube uno o varios archivos Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
 
-# ----------------- Helpers -----------------
+# Helpers
 def _uploaded_to_bytes(uploaded):
-    """Devuelve bytes del archivo subido sin depender del puntero interno."""
     if uploaded is None:
         return b""
     if hasattr(uploaded, "getvalue"):
@@ -89,14 +81,18 @@ def _uploaded_to_bytes(uploaded):
     return uploaded.read()
 
 def read_csv_flexible(uploaded_file):
-    """Lee CSV intentando separadores comunes y manejando coma decimal."""
     raw = _uploaded_to_bytes(uploaded_file)
     if not raw:
         raise ValueError("Archivo vacío.")
     bio = io.BytesIO(raw)
 
-    # 1) común en tus datos: sep=';' y coma decimal
-    for sep, dec in [(";", ","), (";", "."), (",", ","), (",", "."), (None, ","), (None, ".")]:
+    # pruebas de separador/decimal
+    candidates = [
+        (";", ","), (";", "."),
+        (",", ","), (",", "."),
+        (None, ","), (None, "."),
+    ]
+    for sep, dec in candidates:
         try:
             bio.seek(0)
             df = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
@@ -105,19 +101,15 @@ def read_csv_flexible(uploaded_file):
         except Exception:
             continue
 
-    # 2) último intento: whitespace
-    try:
-        bio.seek(0)
-        df = pd.read_csv(bio, sep=r"\s+", engine="python")
-        if df.shape[1] >= 2:
-            return df
-    except Exception:
-        pass
+    # whitespace
+    bio.seek(0)
+    df = pd.read_csv(bio, sep=r"\s+", engine="python")
+    if df.shape[1] >= 2:
+        return df
 
     raise ValueError("No pude leer el CSV (revisa separador/decimal).")
 
 def preprocess_df(df):
-    """Toma primeras 2 columnas como wavelength/intensity y limpia NaN."""
     df = df.copy()
     if df.shape[1] < 2:
         raise ValueError("El archivo no tiene al menos 2 columnas.")
@@ -128,26 +120,21 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-@st.cache_resource
-def get_cmfs():
-    return MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
+def build_locus_and_cmfs():
+    cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"].copy().align(SpectralShape(380, 780, 1))
 
-@st.cache_resource
-def get_locus_from_cmfs():
-    """
-    Construye la locus espectral (x,y) a partir de las CMFs.
-    Evita crear SpectralDistribution para cada λ (más estable y rápido).
-    """
-    cmfs = get_cmfs().copy().align(SpectralShape(380, 780, 1))
-    # domain / wavelengths
+    # Extraer longitudes de onda de forma robusta
     wls = None
     for attr in ("wavelengths", "domain"):
         if hasattr(cmfs, attr):
             wls = np.asarray(getattr(cmfs, attr))
             break
     if wls is None:
-        # fallback: intentar extraer del índice
-        wls = np.asarray(cmfs.index)
+        # fallback
+        try:
+            wls = np.asarray(cmfs.index)
+        except Exception:
+            raise RuntimeError("No pude extraer el dominio de las CMFs.")
 
     vals = np.asarray(cmfs.values)
     # asegurar Nx3
@@ -155,26 +142,22 @@ def get_locus_from_cmfs():
         vals = vals.T
 
     denom = np.sum(vals, axis=1)
-    # evitar división por cero
     denom = np.where(denom == 0, np.nan, denom)
     x = vals[:, 0] / denom
     y = vals[:, 1] / denom
     xy = np.column_stack([x, y])
-
-    # limpiar NaN (por si hay)
     m = np.isfinite(xy).all(axis=1)
-    return wls[m].astype(int), xy[m]
+    return cmfs, wls[m].astype(int), xy[m]
 
-_locus_wls, _locus_xy = get_locus_from_cmfs()
-_cmfs = get_cmfs()
+# Construir cmfs y locus (sin cache de Streamlit)
+_cmfs, _locus_wls, _locus_xy = build_locus_and_cmfs()
 
 def dominant_wavelength_from_xy(x, y):
     d = np.sqrt((_locus_xy[:, 0] - x) ** 2 + (_locus_xy[:, 1] - y) ** 2)
     idx = int(np.argmin(d))
     return int(_locus_wls[idx])
 
-
-# ----------------- Plot base -----------------
+# Plot base
 fig, ax = plt.subplots(figsize=(7, 7))
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
@@ -195,12 +178,11 @@ for txt in list(ax.texts):
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     lbl.set_clip_on(False)
 
-# ----------------- Estilos de texto -----------------
+# estilos
 fontprop_title = FontProperties(family=title_font_family, size=title_font_size)
 fontprop_ticks = FontProperties(family=tick_font_family, size=tick_font_size)
 fontprop_locus = FontProperties(family=locus_numbers_font_family, size=locus_numbers_font_size)
 
-# título y ejes
 try:
     t = ax.set_title(plot_title, color=title_color)
     t.set_fontproperties(fontprop_title)
@@ -216,7 +198,6 @@ except Exception:
     ax.set_xlabel(x_axis_label, color=axes_color)
     ax.set_ylabel(y_axis_label, color=axes_color)
 
-# ticks
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     try:
         lbl.set_fontproperties(fontprop_ticks)
@@ -225,7 +206,6 @@ for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     except Exception:
         pass
 
-# locus labels (números λ)
 for txt in list(ax.texts):
     try:
         txt.set_clip_on(False)
@@ -234,15 +214,12 @@ for txt in list(ax.texts):
     except Exception:
         pass
 
-# spines
 try:
     for spine in ax.spines.values():
         spine.set_linewidth(axes_linewidth)
 except Exception:
     pass
 
-
-# ----------------- Core processing -----------------
 results = []
 
 def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local, interp_interval_local):
@@ -253,32 +230,26 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
 
     mask = (df["wavelength"] >= wl_min_local) & (df["wavelength"] <= wl_max_local)
     df = df.loc[mask].copy()
-
     if df.empty:
         raise ValueError("No hay datos en el rango seleccionado.")
 
-    # ordenar y colapsar duplicados (importante para interpolación estable)
     df = df.sort_values("wavelength")
     df = df.groupby("wavelength", as_index=False)["intensity"].mean()
-
     if df.shape[0] < 2:
         raise ValueError("Se necesitan al menos 2 puntos para calcular coordenadas.")
 
-    # construir SPD e interpolar
     sd = SpectralDistribution(dict(zip(df["wavelength"].values, df["intensity"].values)))
     sd_int = sd.copy().interpolate(SpectralShape(wl_min_local, wl_max_local, interp_interval_local))
 
     XYZ = sd_to_XYZ(sd_int, cmfs=_cmfs)
     xy = XYZ_to_xy(XYZ)
-
     x_val, y_val = float(xy[0]), float(xy[1])
 
     if not (np.isfinite(x_val) and np.isfinite(y_val)):
-        raise ValueError("Coordenadas no finitas (revisa el espectro: intensidades/rango).")
+        raise ValueError("Coordenadas no finitas (revisa el espectro).")
 
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
 
-    # dibujar punto
     ax.scatter([x_val], [y_val], c=[color], marker=marker, s=size, label=label)
 
     if show_point_labels:
@@ -293,8 +264,7 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
 
     return {"Label": label, "x": x_val, "y": y_val, "Dominant_wavelength_nm": wl_dom}
 
-
-# ----------------- CSV processing -----------------
+# CSV processing
 if csv_files:
     st.subheader("CSV files")
     for i, file in enumerate(csv_files):
@@ -315,8 +285,7 @@ if csv_files:
             except Exception as e:
                 st.error(f"Error procesando {file.name}: {e}")
 
-
-# ----------------- XLSX processing -----------------
+# XLSX processing
 if xlsx_files:
     st.subheader("XLSX files (multiple sheets supported)")
     for j, file in enumerate(xlsx_files):
@@ -324,7 +293,6 @@ if xlsx_files:
         if not raw:
             st.error(f"Archivo vacío: {file.name}")
             continue
-
         try:
             xls = pd.ExcelFile(io.BytesIO(raw))
             for k, sheet_name in enumerate(xls.sheet_names):
@@ -365,12 +333,10 @@ if xlsx_files:
                         st.success(f"Procesado: {label} -> x={res['x']:.4f}, y={res['y']:.4f}, λ_dom={res['Dominant_wavelength_nm']} nm")
                     except Exception as e:
                         st.error(f"Error procesando {file.name} - {sheet_name}: {e}")
-
         except Exception as e:
             st.error(f"No se pudo leer {file.name} como Excel: {e}")
 
-
-# ----------------- Results and downloads -----------------
+# Results and downloads
 if results:
     try:
         legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
@@ -393,21 +359,11 @@ if results:
 
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
-    st.download_button(
-        "📥 Descargar tabla CSV",
-        data=csv_buf.getvalue(),
-        file_name="coordenadas_CIE1931.csv",
-        mime="text/csv"
-    )
+    st.download_button("Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
 
     img_buf = io.BytesIO()
     fig.savefig(img_buf, format="tiff", dpi=dpi_save)
     img_buf.seek(0)
-    st.download_button(
-        "📥 Descargar diagrama TIFF (alta resolución)",
-        data=img_buf.getvalue(),
-        file_name="diagrama_CIE1931.tiff",
-        mime="image/tiff"
-    )
+    st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="diagrama_CIE1931.tiff", mime="image/tiff")
 else:
     st.info("Aún no hay datasets procesados. Sube archivos CSV o XLSX y configura cada dataset.")
