@@ -584,10 +584,12 @@ datasets_by_id = {ds['id']: ds for ds in datasets}
 handle_config_dialog(datasets_by_id)
 
 # ----------------- Figura CIE
- -----------------
 fig, ax = plt.subplots(figsize=(7, 7))
 try:
-    fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
+    try:
+        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
+    except TypeError:
+        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
     ax.clear()
     plt.close(fig)
     fig, ax = fig_cie, ax_cie
