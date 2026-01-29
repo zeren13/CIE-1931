@@ -41,6 +41,17 @@ plot_title = st.sidebar.text_input("Título del gráfico", value="Diagrama crom�
 x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x-chromaticity coordinate")
 y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y-chromaticity coordinate")
 
+def _safe_mpl_text(s: str) -> str:
+    """Evita caídas de Matplotlib por mathtext inválido.
+
+    Matplotlib intenta interpretar mathtext si ve '$'. Si el usuario escribe un
+    '$' suelto (o impar), puede explotar en tight_layout.
+    """
+    s = "" if s is None else str(s)
+    if s.count("$") % 2 == 1:
+        s = s.replace("$", "")
+    return s
+
 title_color = st.sidebar.color_picker("Color del título", "#000000")
 axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
 locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
@@ -613,19 +624,19 @@ fontprop_ticks = FontProperties(family=tick_font_family, size=tick_font_size)
 fontprop_locus = FontProperties(family=locus_numbers_font_family, size=locus_numbers_font_size)
 
 try:
-    t = ax.set_title(plot_title, color=title_color)
+    t = ax.set_title(_safe_mpl_text(plot_title), color=title_color)
     t.set_fontproperties(fontprop_title)
 except Exception:
-    ax.set_title(plot_title, color=title_color)
+    ax.set_title(_safe_mpl_text(plot_title), color=title_color)
 
 try:
-    tx = ax.set_xlabel(x_axis_label, color=axes_color)
-    ty = ax.set_ylabel(y_axis_label, color=axes_color)
+    tx = ax.set_xlabel(_safe_mpl_text(x_axis_label), color=axes_color)
+    ty = ax.set_ylabel(_safe_mpl_text(y_axis_label), color=axes_color)
     tx.set_fontproperties(fontprop_ticks)
     ty.set_fontproperties(fontprop_ticks)
 except Exception:
-    ax.set_xlabel(x_axis_label, color=axes_color)
-    ax.set_ylabel(y_axis_label, color=axes_color)
+    ax.set_xlabel(_safe_mpl_text(x_axis_label), color=axes_color)
+    ax.set_ylabel(_safe_mpl_text(y_axis_label), color=axes_color)
 
 for lbl in ax.get_xticklabels() + ax.get_yticklabels():
     try:
