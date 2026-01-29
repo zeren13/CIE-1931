@@ -1,5 +1,6 @@
 streamlit
 colour-science
-matplotlib
+numpy
 pandas
+matplotlib
 openpyxl
