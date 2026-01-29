@@ -21,9 +21,8 @@ except Exception:
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({'font.size': 12})
-
-# st.dialog existe pero se usa como decorador (Streamlit >= 1.25 aprox.)
-HAS_DIALOG_DECORATOR = callable(getattr(st, "dialog", None))
+DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
+HAS_DIALOG = callable(DIALOG_DECORATOR)
 
 st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión")
 
@@ -34,6 +33,7 @@ wl_max_default = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_v
 interp_interval_default = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 2, 5, 10], index=2)
 dpi_save = st.sidebar.number_input("DPI para exportar imagen TIFF", min_value=72, max_value=1200, value=600)
 
+# ---- Personalización del diagrama (se conserva) ----
 st.sidebar.markdown("---")
 st.sidebar.subheader("Personalización del diagrama")
 
@@ -70,8 +70,9 @@ legend_box_color = st.sidebar.color_picker("Fondo", "#FFFFFF")
 legend_box_alpha = st.sidebar.slider("Opacidad fondo", min_value=0.0, max_value=1.0, value=0.85)
 legend_box_linewidth = st.sidebar.slider("Grosor borde", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
 
+# ---- λ dominante / pureza (se conserva) ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("λ dominante / pureza")
+st.sidebar.subheader("λ dominante / pureza (mejorado)")
 
 wp_mode = st.sidebar.selectbox("White point", ["E (0.3333, 0.3333)", "D65 (0.3127, 0.3290)", "Custom"], index=0)
 if wp_mode.startswith("E"):
@@ -165,6 +166,7 @@ def guess_columns(df: pd.DataFrame):
         return None, None
 
     norm = [_norm_colname(c) for c in cols]
+
     wl_idx = None
     int_idx = None
 
@@ -455,46 +457,52 @@ def get_cfg(ds):
     st.session_state[key] = cfg
     return cfg
 
-def render_cfg_form(ds, cfg):
-    df = ds["df"]
-    cols = list(df.columns)
+
+def render_cfg_form(ds, cfg, key_prefix="dlg_"):
+    """Formulario de configuración por muestra.
+    key_prefix evita colisiones con otros widgets y permite que Streamlit maneje bien el estado.
+    """
+    ds_id = ds["id"]
+    keyp = f"{key_prefix}{ds_id}_"
 
     st.markdown("Columnas")
-    wl_col = st.selectbox("Columna de λ (nm)", options=cols,
-                          index=cols.index(cfg["wl_col"]) if cfg["wl_col"] in cols else 0,
-                          key=f"wlcol_{ds['id']}")
-    int_col = st.selectbox("Columna de intensidad", options=cols,
-                           index=cols.index(cfg["int_col"]) if cfg["int_col"] in cols else (1 if len(cols) > 1 else 0),
-                           key=f"intcol_{ds['id']}")
+    wl_col = st.selectbox("Columna de longitud de onda", options=list(ds["df"].columns),
+                          index=list(ds["df"].columns).index(cfg["wl_col"]) if cfg["wl_col"] in ds["df"].columns else 0,
+                          key=f"{keyp}wlcol")
+    int_col = st.selectbox("Columna de intensidad", options=list(ds["df"].columns),
+                           index=list(ds["df"].columns).index(cfg["int_col"]) if cfg["int_col"] in ds["df"].columns else 1,
+                           key=f"{keyp}intcol")
 
     st.markdown("Estilo del punto")
-    label = st.text_input("Label", value=cfg["label"], key=f"label_{ds['id']}")
-    color = st.color_picker("Color", value=cfg["color"], key=f"color_{ds['id']}")
-    marker = st.selectbox("Marker", options=['o','s','^','x','D','*','v'],
-                          index=['o','s','^','x','D','*','v'].index(cfg["marker"]) if cfg["marker"] in ['o','s','^','x','D','*','v'] else 0,
-                          key=f"marker_{ds['id']}")
-    size = st.slider("Tamaño (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"size_{ds['id']}")
+    label = st.text_input("Label", value=cfg["label"], key=f"{keyp}label")
+    color = st.color_picker("Color", value=cfg["color"], key=f"{keyp}color")
+    marker_opts = ['o','s','^','x','D','*','v']
+    marker = st.selectbox("Marker", options=marker_opts,
+                          index=marker_opts.index(cfg["marker"]) if cfg["marker"] in marker_opts else 0,
+                          key=f"{keyp}marker")
+    size = st.slider("Tamaño (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"{keyp}size")
 
     st.markdown("Rango para cálculo")
-    wl_min = st.number_input("λ min (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"wlmin_{ds['id']}")
-    wl_max = st.number_input("λ max (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"wlmax_{ds['id']}")
-    interp = st.selectbox("Intervalo (nm)", options=[1,2,5,10],
-                          index=[1,2,5,10].index(int(cfg["interp"])) if int(cfg["interp"]) in [1,2,5,10] else 2,
-                          key=f"interp_{ds['id']}")
+    wl_min = st.number_input("λ min (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"{keyp}wlmin")
+    wl_max = st.number_input("λ max (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"{keyp}wlmax")
+    interp_opts = [1,2,5,10]
+    interp = st.selectbox("Intervalo (nm)", options=interp_opts,
+                          index=interp_opts.index(int(cfg["interp"])) if int(cfg["interp"]) in interp_opts else 1,
+                          key=f"{keyp}interp")
 
     st.markdown("Preprocesamiento")
-    baseline_subtract_min = st.checkbox("Baseline: restar el mínimo (llevar a 0)", value=bool(cfg["baseline_subtract_min"]), key=f"base_{ds['id']}")
-    clip_negative = st.checkbox("Recortar intensidades negativas a 0", value=bool(cfg["clip_negative"]), key=f"clip_{ds['id']}")
+    baseline_subtract_min = st.checkbox("Baseline: restar el mínimo (llevar a 0)", value=bool(cfg["baseline_subtract_min"]), key=f"{keyp}base")
+    clip_negative = st.checkbox("Recortar intensidades negativas a 0", value=bool(cfg["clip_negative"]), key=f"{keyp}clip")
 
     smooth_options = ["None", "Moving average"] + (["Savitzky-Golay"] if _HAS_SCIPY else [])
     smooth_method = st.selectbox("Suavizado", options=smooth_options,
                                  index=smooth_options.index(cfg["smooth_method"]) if cfg["smooth_method"] in smooth_options else 0,
-                                 key=f"smooth_{ds['id']}")
-    smooth_window = st.slider("Ventana (suavizado)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"win_{ds['id']}")
-    smooth_poly = st.slider("Orden polinómico (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"poly_{ds['id']}")
+                                 key=f"{keyp}smooth")
+    smooth_window = st.slider("Ventana (suavizado)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"{keyp}win")
+    smooth_poly = st.slider("Orden polinómico (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"{keyp}poly")
     normalize = st.selectbox("Normalización", options=["None", "Max = 1", "Area = 1"],
                              index=["None","Max = 1","Area = 1"].index(cfg["normalize"]) if cfg["normalize"] in ["None","Max = 1","Area = 1"] else 0,
-                             key=f"norm_{ds['id']}")
+                             key=f"{keyp}norm")
 
     return {
         "label": label,
@@ -514,94 +522,72 @@ def render_cfg_form(ds, cfg):
         "normalize": normalize,
     }
 
-def _widget_mapping(ds_id: str, cfg: dict):
+
+# ----------------- Configuración por muestra (modal) -----------------
+if "open_cfg_id" not in st.session_state:
+    st.session_state["open_cfg_id"] = None
+
+def request_open_config(ds_id: str):
+    st.session_state["open_cfg_id"] = ds_id
+    st.rerun()
+
+def handle_config_dialog(datasets_by_id):
+    """Si hay una muestra seleccionada, abre el diálogo y detiene el resto del script.
+    Esto evita que la app siga calculando con la config vieja en el mismo run.
     """
-    Mapea keys de widgets -> valores, para poder "pre-cargar" el formulario
-    con la configuración guardada SIN intentar reescribir widgets ya creados.
-    """
-    return {
-        f"label_{ds_id}": cfg["label"],
-        f"color_{ds_id}": cfg["color"],
-        f"marker_{ds_id}": cfg["marker"],
-        f"size_{ds_id}": cfg["size"],
-        f"wlmin_{ds_id}": cfg["wl_min"],
-        f"wlmax_{ds_id}": cfg["wl_max"],
-        f"interp_{ds_id}": cfg["interp"],
-        f"base_{ds_id}": cfg["baseline_subtract_min"],
-        f"clip_{ds_id}": cfg["clip_negative"],
-        f"smooth_{ds_id}": cfg["smooth_method"],
-        f"win_{ds_id}": cfg["smooth_window"],
-        f"poly_{ds_id}": cfg["smooth_poly"],
-        f"norm_{ds_id}": cfg["normalize"],
-        f"wlcol_{ds_id}": cfg["wl_col"],
-        f"intcol_{ds_id}": cfg["int_col"],
-    }
-
-def prime_widget_state_for_dialog(ds_id: str, cfg: dict):
-    """
-    Pre-carga st.session_state *antes* de crear los widgets del diálogo.
-    Esto evita el error StreamlitAPIException de intentar modificar el estado
-    de widgets ya instanciados.
-    """
-    prime_key = f"prime_{ds_id}"
-    if st.session_state.get(prime_key, False):
-        return
-    for k, v in _widget_mapping(ds_id, cfg).items():
-        st.session_state[k] = v
-    st.session_state[prime_key] = True
-
-
-# ----------------- Modal manager (sin st.rerun manual) -----------------
-if "active_dialog_id" not in st.session_state:
-    st.session_state["active_dialog_id"] = None
-
-def request_open_dialog(ds_id: str):
-    st.session_state["active_dialog_id"] = ds_id
-    # Fuerza a re-cargar valores del formulario desde cfg cuando se abra el diálogo.
-    st.session_state[f"prime_{ds_id}"] = False
-
-def maybe_open_dialog(datasets_by_id: dict):
-    ds_id = st.session_state.get("active_dialog_id")
-    if not ds_id or ds_id not in datasets_by_id:
+    ds_id = st.session_state.get("open_cfg_id", None)
+    if not ds_id:
         return
 
-    ds = datasets_by_id[ds_id]
+    ds = datasets_by_id.get(ds_id)
+    if ds is None:
+        st.session_state["open_cfg_id"] = None
+        return
+
+    cfg = get_cfg(ds)
     title = f"Configurar: {ds['name']}"
 
-    if HAS_DIALOG_DECORATOR:
-        @st.dialog(title)
+    if HAS_DIALOG:
+        @DIALOG_DECORATOR(title)
         def _dlg():
-            cfg_inner = get_cfg(ds)
-            prime_widget_state_for_dialog(ds_id, cfg_inner)
             with st.form(key=f"form_{ds_id}"):
-                new_cfg = render_cfg_form(ds, cfg_inner)
-                submitted = st.form_submit_button("Guardar")
+                new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
+                cA, cB = st.columns(2)
+                with cA:
+                    submitted = st.form_submit_button("Guardar")
+                with cB:
+                    cancelled = st.form_submit_button("Cancelar")
             if submitted:
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
-                st.session_state["active_dialog_id"] = None
-                st.session_state[f"prime_{ds_id}"] = False
-                st.success("Guardado")
+                st.session_state["open_cfg_id"] = None
                 st.rerun()
-        _dlg()
-    else:
-        with st.expander(title, expanded=True):
-            cfg_inner = get_cfg(ds)
-            prime_widget_state_for_dialog(ds_id, cfg_inner)
-            new_cfg = render_cfg_form(ds, cfg_inner)
-            if st.button("Guardar", key=f"save_{ds_id}"):
-                st.session_state[f"cfg_{ds_id}"] = new_cfg
-                st.session_state["active_dialog_id"] = None
-                st.session_state[f"prime_{ds_id}"] = False
-                st.success("Guardado")
+            if cancelled:
+                st.session_state["open_cfg_id"] = None
                 st.rerun()
 
-# ----------------- Figura CIE -----------------
+        _dlg()
+        st.stop()
+    else:
+        with st.expander(title, expanded=True):
+            new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
+            cA, cB = st.columns(2)
+            if cA.button("Guardar", key=f"save_{ds_id}"):
+                st.session_state[f"cfg_{ds_id}"] = new_cfg
+                st.session_state["open_cfg_id"] = None
+                st.rerun()
+            if cB.button("Cancelar", key=f"cancel_{ds_id}"):
+                st.session_state["open_cfg_id"] = None
+                st.rerun()
+        st.stop()
+
+datasets_by_id = {ds['id']: ds for ds in datasets}
+handle_config_dialog(datasets_by_id)
+
+# ----------------- Figura CIE
+ -----------------
 fig, ax = plt.subplots(figsize=(7, 7))
 try:
-    try:
-        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
-    except TypeError:
-        fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
+    fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
     ax.clear()
     plt.close(fig)
     fig, ax = fig_cie, ax_cie
@@ -661,137 +647,135 @@ try:
 except Exception:
     pass
 
-# ----------------- UI: lista de muestras + dialog -----------------
-if not datasets:
-    st.info("Sube archivos para comenzar.")
-    st.stop()
-
-datasets_by_id = {d["id"]: d for d in datasets}
-
-st.markdown("### Muestras")
-st.caption("El nombre que puedes editar es el Label. El nombre del archivo/hoja aparece debajo.")
-
-for ds in datasets:
-    cfg = get_cfg(ds)
-
-    c1, c2, c3 = st.columns([6, 2, 4])
-    with c1:
-        st.write(cfg["label"])
-        st.caption(ds["name"])
-    with c2:
-        if st.button("Configurar", key=f"btn_cfg_{ds['id']}"):
-            request_open_dialog(ds["id"])
-    with c3:
-        st.write(f"λ: {cfg['wl_min']}–{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
-
-maybe_open_dialog(datasets_by_id)
-
-# ----------------- Procesar (después del diálogo) -----------------
+# ----------------- Procesar -----------------
 results = []
 spectra_to_plot = []
 
-for ds in datasets:
-    cfg = get_cfg(ds)
-    try:
-        df = ds["df"]
-        if cfg["wl_min"] >= cfg["wl_max"]:
-            raise ValueError("λ min debe ser menor que λ max.")
-        if cfg["wl_min"] < CMF_MIN or cfg["wl_max"] > CMF_MAX:
-            raise ValueError(f"El rango debe estar dentro de las CMFs: {CMF_MIN:.0f}–{CMF_MAX:.0f} nm.")
-        if cfg["wl_col"] not in df.columns or cfg["int_col"] not in df.columns:
-            raise ValueError("Columnas seleccionadas no existen en este archivo/hoja.")
+if datasets:
+    st.markdown("### Muestras")
+    st.caption("Opciones por muestra: botón Configurar (ventana emergente). Espectros: en desplegable aparte.")
 
-        wl_grid, intensity_grid = preprocess_spectrum(
-            df, cfg["wl_col"], cfg["int_col"],
-            cfg["wl_min"], cfg["wl_max"], cfg["interp"],
-            clip_negative=cfg["clip_negative"],
-            baseline_subtract_min=cfg["baseline_subtract_min"],
-            smooth_method=cfg["smooth_method"],
-            smooth_window=cfg["smooth_window"],
-            smooth_poly=cfg["smooth_poly"],
-            normalize_mode=cfg["normalize"],
-        )
+    for ds in datasets:
+        cfg = get_cfg(ds)
 
-        x_val, y_val = spectrum_to_xy(wl_grid, intensity_grid)
-        wl_dom, purity, wl_kind = dominant_wavelength_and_purity(x_val, y_val, white_point=WHITE_POINT)
+        c1, c2, c3 = st.columns([6, 2, 4])
+        with c1:
+            st.write(ds["name"])
+        with c2:
+            if st.button("Configurar", key=f"btn_cfg_{ds['id']}"):
+                request_open_config(ds["id"])
+        with c3:
+            st.write(f"λ: {cfg['wl_min']}–{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
 
-        ax.scatter([x_val], [y_val], c=[cfg["color"]], marker=cfg["marker"], s=cfg["size"], label=cfg["label"])
-        if show_point_labels:
-            ax.text(x_val + 0.008, y_val, cfg["label"],
-                    fontsize=tick_font_size, fontfamily=tick_font_family,
-                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+        try:
+            df = ds["df"]
+            if cfg["wl_min"] >= cfg["wl_max"]:
+                raise ValueError("λ min debe ser menor que λ max.")
+            if cfg["wl_min"] < CMF_MIN or cfg["wl_max"] > CMF_MAX:
+                raise ValueError(f"El rango debe estar dentro de las CMFs: {CMF_MIN:.0f}–{CMF_MAX:.0f} nm.")
+            if cfg["wl_col"] not in df.columns or cfg["int_col"] not in df.columns:
+                raise ValueError("Columnas seleccionadas no existen en este archivo/hoja.")
 
-        results.append({
-            "Label": cfg["label"],
-            "x": float(x_val),
-            "y": float(y_val),
-            "Wavelength_nm": (float(wl_dom) if np.isfinite(wl_dom) else np.nan),
-            "Wavelength_type": wl_kind,
-            "Excitation_purity_%": (float(purity) if np.isfinite(purity) else np.nan),
-            "wl_min_nm": int(cfg["wl_min"]),
-            "wl_max_nm": int(cfg["wl_max"]),
-            "interp_nm": int(cfg["interp"]),
-            "baseline_subtract_min": bool(cfg["baseline_subtract_min"]),
-            "clip_negative": bool(cfg["clip_negative"]),
-            "smooth_method": cfg["smooth_method"],
-            "smooth_window": int(cfg["smooth_window"]),
-            "smooth_poly": int(cfg["smooth_poly"]),
-            "normalize": cfg["normalize"],
-            "wl_column": cfg["wl_col"],
-            "intensity_column": cfg["int_col"],
-        })
+            wl_grid, intensity_grid = preprocess_spectrum(
+                df, cfg["wl_col"], cfg["int_col"],
+                cfg["wl_min"], cfg["wl_max"], cfg["interp"],
+                clip_negative=cfg["clip_negative"],
+                baseline_subtract_min=cfg["baseline_subtract_min"],
+                smooth_method=cfg["smooth_method"],
+                smooth_window=cfg["smooth_window"],
+                smooth_poly=cfg["smooth_poly"],
+                normalize_mode=cfg["normalize"],
+            )
 
-        spectra_to_plot.append({"label": cfg["label"], "wl": wl_grid, "it": intensity_grid, "color": cfg["color"]})
-    except Exception as e:
-        st.error(f"{cfg['label']}: {e}")
+            x_val, y_val = spectrum_to_xy(wl_grid, intensity_grid)
+            wl_dom, purity, wl_kind = dominant_wavelength_and_purity(x_val, y_val, white_point=WHITE_POINT)
+
+            ax.scatter([x_val], [y_val], c=[cfg["color"]], marker=cfg["marker"], s=cfg["size"], label=cfg["label"])
+            if show_point_labels:
+                ax.text(x_val + 0.008, y_val, cfg["label"],
+                        fontsize=tick_font_size, fontfamily=tick_font_family,
+                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
+
+            results.append({
+                "Label": cfg["label"],
+                "x": float(x_val),
+                "y": float(y_val),
+                "Wavelength_nm": (float(wl_dom) if np.isfinite(wl_dom) else np.nan),
+                "Wavelength_type": wl_kind,
+                "Excitation_purity_%": (float(purity) if np.isfinite(purity) else np.nan),
+                "wl_min_nm": int(cfg["wl_min"]),
+                "wl_max_nm": int(cfg["wl_max"]),
+                "interp_nm": int(cfg["interp"]),
+                "baseline_subtract_min": bool(cfg["baseline_subtract_min"]),
+                "clip_negative": bool(cfg["clip_negative"]),
+                "smooth_method": cfg["smooth_method"],
+                "smooth_window": int(cfg["smooth_window"]),
+                "smooth_poly": int(cfg["smooth_poly"]),
+                "normalize": cfg["normalize"],
+                "wl_column": cfg["wl_col"],
+                "intensity_column": cfg["int_col"],
+            })
+
+            spectra_to_plot.append({
+                "label": cfg["label"],
+                "wl": wl_grid,
+                "it": intensity_grid,
+                "color": cfg["color"]
+            })
+
+            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | λ({wl_kind})={wl_dom:.1f} nm | pureza={purity:.1f}%")
+        except Exception as e:
+            st.error(f"{cfg['label']}: {e}")
+else:
+    st.info("Sube archivos para comenzar.")
 
 # ----------------- Salidas -----------------
-if not results:
-    st.info("No hay datasets procesados (revisa columnas/rangos).")
-    st.stop()
+if results:
+    try:
+        legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
+        frame = legend.get_frame()
+        frame.set_facecolor(legend_box_color)
+        frame.set_alpha(legend_box_alpha)
+        frame.set_linewidth(legend_box_linewidth)
+    except Exception:
+        pass
 
-try:
-    legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
-    frame = legend.get_frame()
-    frame.set_facecolor(legend_box_color)
-    frame.set_alpha(legend_box_alpha)
-    frame.set_linewidth(legend_box_linewidth)
-except Exception:
-    pass
+    col_left, col_right = st.columns([2, 1])
 
-col_left, col_right = st.columns([2, 1])
+    with col_left:
+        st.markdown("### Diagrama CIE 1931")
+        try:
+            plt.tight_layout()
+        except Exception:
+            pass
+        st.pyplot(fig)
 
-with col_left:
-    st.markdown("### Diagrama CIE 1931")
-    plt.tight_layout()
-    st.pyplot(fig, clear_figure=False)
+    with col_right:
+        with st.expander("Espectros de emisión (procesados para el cálculo)", expanded=False):
+            if spectra_to_plot:
+                fig_s, ax_s = plt.subplots(figsize=(3.5, 3.5))
+                for s in spectra_to_plot:
+                    ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"])
+                ax_s.set_xlabel("Wavelength (nm)")
+                ax_s.set_ylabel("Intensity (a.u.)")
+                ax_s.tick_params(labelsize=8)
+                try:
+                    ax_s.legend(fontsize=7, loc="best")
+                except Exception:
+                    pass
+                st.pyplot(fig_s)
+            else:
+                st.info("No hay espectros para mostrar.")
 
-with col_right:
-    with st.expander("Espectros de emisión (procesados para el cálculo)", expanded=False):
-        if spectra_to_plot:
-            fig_s, ax_s = plt.subplots(figsize=(3.5, 3.5))
-            for s in spectra_to_plot:
-                ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"])
-            ax_s.set_xlabel("Wavelength (nm)")
-            ax_s.set_ylabel("Intensity (a.u.)")
-            ax_s.tick_params(labelsize=8)
-            try:
-                ax_s.legend(fontsize=7, loc="best")
-            except Exception:
-                pass
-            st.pyplot(fig_s, clear_figure=False)
-        else:
-            st.info("No hay espectros para mostrar.")
+    st.markdown("### Tabla de coordenadas")
+    results_df = pd.DataFrame(results)
+    st.dataframe(results_df)
 
-st.markdown("### Tabla de coordenadas")
-results_df = pd.DataFrame(results)
-st.dataframe(results_df)
+    csv_buf = io.StringIO()
+    results_df.to_csv(csv_buf, index=False)
+    st.download_button("Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
 
-csv_buf = io.StringIO()
-results_df.to_csv(csv_buf, index=False)
-st.download_button("Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
-
-img_buf = io.BytesIO()
-fig.savefig(img_buf, format="tiff", dpi=dpi_save)
-img_buf.seek(0)
-st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="diagrama_CIE1931.tiff", mime="image/tiff")
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format="tiff", dpi=dpi_save)
+    img_buf.seek(0)
+    st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="diagrama_CIE1931.tiff", mime="image/tiff")
