@@ -51,6 +51,9 @@ plot_title = st.sidebar.text_input("Título", value="Diagrama cromático CIE 193
 x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x-chromaticity coordinate")
 y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y-chromaticity coordinate")
 
+# Mostrar/ocultar labels junto a cada punto
+show_point_labels = st.sidebar.checkbox("Mostrar etiquetas junto a cada punto", value=True)
+
 # ----------------- Uploaders -----------------
 st.markdown("### Subir datos")
 st.markdown("CSV: uno o varios archivos. XLSX: uno o varios archivos (se procesan hojas).")
