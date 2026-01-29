@@ -12,7 +12,7 @@ from matplotlib.font_manager import FontProperties
 import colour
 from colour import MSDS_CMFS
 
-APP_VERSION = "2026-01-28_v_fix_deepcopy"
+APP_VERSION = "2026-01-28_v_fix_numpy_trapz"
 
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({'font.size': 12})
@@ -239,9 +239,10 @@ def spectrum_to_xy(wl_grid, intensity_grid):
     ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
     zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
 
-    X = float(np.trapz(intensity_grid * xbar, wl_grid))
-    Y = float(np.trapz(intensity_grid * ybar, wl_grid))
-    Z = float(np.trapz(intensity_grid * zbar, wl_grid))
+    integrate = getattr(np, 'trapezoid', None) or getattr(np, 'trapz')
+    X = float(integrate(intensity_grid * xbar, wl_grid))
+    Y = float(integrate(intensity_grid * ybar, wl_grid))
+    Z = float(integrate(intensity_grid * zbar, wl_grid))
 
     S = X + Y + Z
     if not np.isfinite(S) or S <= 0:
