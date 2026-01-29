@@ -12,24 +12,13 @@ from matplotlib.font_manager import FontProperties
 import colour
 from colour import MSDS_CMFS
 
-APP_VERSION = "2026-01-28_v_fix_numpy_trapz"
 
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({'font.size': 12})
 
 st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión (múltiples archivos)")
-st.caption(f"App version: {APP_VERSION}")
-
-with st.sidebar.expander("Diagnóstico (solo si hay errores)", expanded=False):
-    debug_mode = st.checkbox("Mostrar traceback completo", value=True)
-    st.write("Python:", __import__("sys").version.split()[0])
-    st.write("Streamlit:", getattr(__import__("streamlit"), "__version__", "unknown"))
-    st.write("colour-science:", getattr(__import__("colour"), "__version__", "unknown"))
-    st.write("numpy:", getattr(__import__("numpy"), "__version__", "unknown"))
-    st.write("pandas:", getattr(__import__("pandas"), "__version__", "unknown"))
-    st.write("matplotlib:", getattr(__import__("matplotlib"), "__version__", "unknown"))
-
 st.sidebar.header("Parámetros globales")
+
 wl_min = st.sidebar.number_input("λ mínimo (nm)", min_value=200, max_value=10000, value=380)
 wl_max = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=10000, value=780)
 interp_interval = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 5, 10], index=0)
@@ -306,8 +295,6 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
 
 def show_error(file_label, e):
     st.error(f"Error procesando {file_label}: {e}")
-    if debug_mode:
-        st.code(traceback.format_exc())
 
 if csv_files:
     st.subheader("CSV files")
