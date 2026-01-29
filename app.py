@@ -11,10 +11,8 @@ from matplotlib.font_manager import FontProperties
 
 import colour
 from colour import MSDS_CMFS
-from colour.colorimetry import SpectralShape
-from colour import SpectralDistribution, sd_to_XYZ, XYZ_to_xy
 
-APP_VERSION = "2026-01-28_v_debug2"
+APP_VERSION = "2026-01-28_v_fix_deepcopy"
 
 st.set_page_config(layout="wide", page_title="CIE 1931 - Multi Spectra")
 matplotlib.rcParams.update({'font.size': 12})
@@ -130,39 +128,49 @@ def preprocess_df(df):
     df = df.dropna()
     return df
 
-def build_locus_and_cmfs():
-    cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer'].copy().align(SpectralShape(380, 780, 1))
+# ---- CMFs arrays (evitamos SpectralDistribution.copy/deepcopy por completo) ----
+def cmfs_arrays():
+    cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
 
     wls = None
     for attr in ("wavelengths", "domain"):
         if hasattr(cmfs, attr):
-            wls = np.asarray(getattr(cmfs, attr))
+            wls = np.asarray(getattr(cmfs, attr), dtype=float)
             break
     if wls is None:
-        wls = np.asarray(getattr(cmfs, "index", []))
-        if wls.size == 0:
-            raise RuntimeError("No pude extraer el dominio de las CMFs.")
+        wls = np.asarray(cmfs.index, dtype=float)
 
-    vals = np.asarray(cmfs.values)
+    vals = np.asarray(cmfs.values, dtype=float)
     if vals.shape[0] == 3 and vals.shape[1] == wls.shape[0]:
         vals = vals.T
+    if vals.shape[1] != 3:
+        raise RuntimeError(f"CMFs con forma inesperada: {vals.shape}")
 
-    denom = np.sum(vals, axis=1)
-    denom = np.where(denom == 0, np.nan, denom)
-    x = vals[:, 0] / denom
-    y = vals[:, 1] / denom
+    return wls, vals[:, 0], vals[:, 1], vals[:, 2]
+
+CMF_WLS, CMF_X, CMF_Y, CMF_Z = cmfs_arrays()
+CMF_MIN, CMF_MAX = float(np.min(CMF_WLS)), float(np.max(CMF_WLS))
+
+def locus_arrays(wl_start=380, wl_end=780):
+    m = (CMF_WLS >= wl_start) & (CMF_WLS <= wl_end)
+    wls = CMF_WLS[m]
+    xbar, ybar, zbar = CMF_X[m], CMF_Y[m], CMF_Z[m]
+    den = xbar + ybar + zbar
+    den = np.where(den == 0, np.nan, den)
+    x = xbar / den
+    y = ybar / den
     xy = np.column_stack([x, y])
+    ok = np.isfinite(xy).all(axis=1)
+    return wls[ok].astype(int), xy[ok]
 
-    m = np.isfinite(xy).all(axis=1)
-    return cmfs, wls[m].astype(int), xy[m]
-
-_cmfs, _locus_wls, _locus_xy = build_locus_and_cmfs()
+LOCUS_WLS, LOCUS_XY = locus_arrays(380, 780)
 
 def dominant_wavelength_from_xy(x, y):
-    d = np.sqrt(( _locus_xy[:,0] - x)**2 + ( _locus_xy[:,1] - y)**2)
+    d = np.sqrt((LOCUS_XY[:, 0] - x) ** 2 + (LOCUS_XY[:, 1] - y) ** 2)
     idx = int(np.argmin(d))
-    return int(_locus_wls[idx])
+    return int(LOCUS_WLS[idx])
 
+# ---- Plot base ----
 fig, ax = plt.subplots(figsize=(7,7))
 try:
     fig_cie, ax_cie = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
@@ -225,6 +233,21 @@ try:
 except Exception:
     pass
 
+# ---- Integración numérica: espectro -> XYZ -> xy ----
+def spectrum_to_xy(wl_grid, intensity_grid):
+    xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
+    ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
+    zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
+
+    X = float(np.trapz(intensity_grid * xbar, wl_grid))
+    Y = float(np.trapz(intensity_grid * ybar, wl_grid))
+    Z = float(np.trapz(intensity_grid * zbar, wl_grid))
+
+    S = X + Y + Z
+    if not np.isfinite(S) or S <= 0:
+        raise ValueError("XYZ inválido (intensidades ~0 en el rango).")
+    return X / S, Y / S
+
 results = []
 
 def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local, interp_interval_local):
@@ -233,6 +256,9 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
     if wl_min_local >= wl_max_local:
         raise ValueError("λ mínimo debe ser menor que λ máximo.")
 
+    if wl_min_local < CMF_MIN or wl_max_local > CMF_MAX:
+        raise ValueError(f"El rango debe estar dentro de las CMFs: {CMF_MIN:.0f}–{CMF_MAX:.0f} nm.")
+
     mask = (df['wavelength'] >= wl_min_local) & (df['wavelength'] <= wl_max_local)
     df = df.loc[mask].copy()
     if df.empty:
@@ -240,19 +266,22 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
 
     df = df.sort_values("wavelength")
     df = df.groupby("wavelength", as_index=False)["intensity"].mean()
-
     if df.shape[0] < 2:
         raise ValueError("Se necesitan al menos 2 puntos para calcular coordenadas.")
 
-    sd = SpectralDistribution(dict(zip(df['wavelength'].values, df['intensity'].values)))
-    sd_int = sd.copy().interpolate(SpectralShape(wl_min_local, wl_max_local, interp_interval_local))
+    wl_grid = np.arange(wl_min_local, wl_max_local + 1e-9, interp_interval_local, dtype=float)
+    intensity_grid = np.interp(
+        wl_grid,
+        df["wavelength"].values.astype(float),
+        df["intensity"].values.astype(float),
+        left=0.0,
+        right=0.0
+    )
 
-    XYZ = sd_to_XYZ(sd_int, cmfs=_cmfs)
-    xy = XYZ_to_xy(XYZ)
-    x_val, y_val = float(xy[0]), float(xy[1])
+    if float(np.max(np.abs(intensity_grid))) <= 0:
+        raise ValueError("Intensidad nula en el rango (revisa columnas / rango).")
 
-    if not (np.isfinite(x_val) and np.isfinite(y_val)):
-        raise ValueError("Coordenadas no finitas (revisa intensidades/rango).")
+    x_val, y_val = spectrum_to_xy(wl_grid, intensity_grid)
 
     wl_dom = dominant_wavelength_from_xy(x_val, y_val)
 
@@ -269,9 +298,9 @@ def process_and_plot(df, label, color, marker, size, wl_min_local, wl_max_local,
             pass
 
     return {
-        "Label": label, "x": x_val, "y": y_val,
-        "Dominant_wavelength_nm": wl_dom,
-        "wl_min_nm": wl_min_local, "wl_max_nm": wl_max_local
+        "Label": label, "x": float(x_val), "y": float(y_val),
+        "Dominant_wavelength_nm": int(wl_dom),
+        "wl_min_nm": int(wl_min_local), "wl_max_nm": int(wl_max_local)
     }
 
 def show_error(file_label, e):
@@ -289,7 +318,7 @@ if csv_files:
             size = st.slider(f"Tamaño (px) (CSV {i})", min_value=10, max_value=400, value=80, key=f"csv_size_{i}")
             wl_min_local = st.number_input(f"λ min (CSV {i})", min_value=200, max_value=10000, value=int(wl_min), key=f"csv_wlmin_{i}")
             wl_max_local = st.number_input(f"λ max (CSV {i})", min_value=200, max_value=10000, value=int(wl_max), key=f"csv_wlmax_{i}")
-            interp_local = st.selectbox(f"Interpolation interval (CSV {i})", [1,5,10], index=0, key=f"csv_interp_{i}")
+            interp_local = st.selectbox(f"Intervalo interpolación (CSV {i})", [1,5,10], index=0, key=f"csv_interp_{i}")
             try:
                 df_tmp = read_csv_flexible(file)
                 res = process_and_plot(df_tmp, label, color, marker, size, wl_min_local, wl_max_local, interp_local)
@@ -315,7 +344,7 @@ if xlsx_files:
                     size = st.slider(f"Tamaño (px) ({file.name} - {sheet_name})", min_value=10, max_value=400, value=80, key=f"xlsx_size_{j}_{k}")
                     wl_min_local = st.number_input(f"λ min ({file.name} - {sheet_name})", min_value=200, max_value=10000, value=int(wl_min), key=f"xlsx_wlmin_{j}_{k}")
                     wl_max_local = st.number_input(f"λ max ({file.name} - {sheet_name})", min_value=200, max_value=10000, value=int(wl_max), key=f"xlsx_wlmax_{j}_{k}")
-                    interp_local = st.selectbox(f"Interpolation interval ({file.name} - {sheet_name})", [1,5,10], index=0, key=f"xlsx_interp_{j}_{k}")
+                    interp_local = st.selectbox(f"Intervalo interpolación ({file.name} - {sheet_name})", [1,5,10], index=0, key=f"xlsx_interp_{j}_{k}")
                     try:
                         df_tmp = pd.read_excel(io.BytesIO(raw), sheet_name=sheet_name)
                         res = process_and_plot(df_tmp, label, color, marker, size, wl_min_local, wl_max_local, interp_local)
