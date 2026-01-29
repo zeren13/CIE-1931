@@ -514,26 +514,42 @@ def render_cfg_form(ds, cfg):
         "normalize": normalize,
     }
 
-def sync_widget_state(ds_id: str, new_cfg: dict):
-    mapping = {
-        f"label_{ds_id}": new_cfg["label"],
-        f"color_{ds_id}": new_cfg["color"],
-        f"marker_{ds_id}": new_cfg["marker"],
-        f"size_{ds_id}": new_cfg["size"],
-        f"wlmin_{ds_id}": new_cfg["wl_min"],
-        f"wlmax_{ds_id}": new_cfg["wl_max"],
-        f"interp_{ds_id}": new_cfg["interp"],
-        f"base_{ds_id}": new_cfg["baseline_subtract_min"],
-        f"clip_{ds_id}": new_cfg["clip_negative"],
-        f"smooth_{ds_id}": new_cfg["smooth_method"],
-        f"win_{ds_id}": new_cfg["smooth_window"],
-        f"poly_{ds_id}": new_cfg["smooth_poly"],
-        f"norm_{ds_id}": new_cfg["normalize"],
-        f"wlcol_{ds_id}": new_cfg["wl_col"],
-        f"intcol_{ds_id}": new_cfg["int_col"],
+def _widget_mapping(ds_id: str, cfg: dict):
+    """
+    Mapea keys de widgets -> valores, para poder "pre-cargar" el formulario
+    con la configuración guardada SIN intentar reescribir widgets ya creados.
+    """
+    return {
+        f"label_{ds_id}": cfg["label"],
+        f"color_{ds_id}": cfg["color"],
+        f"marker_{ds_id}": cfg["marker"],
+        f"size_{ds_id}": cfg["size"],
+        f"wlmin_{ds_id}": cfg["wl_min"],
+        f"wlmax_{ds_id}": cfg["wl_max"],
+        f"interp_{ds_id}": cfg["interp"],
+        f"base_{ds_id}": cfg["baseline_subtract_min"],
+        f"clip_{ds_id}": cfg["clip_negative"],
+        f"smooth_{ds_id}": cfg["smooth_method"],
+        f"win_{ds_id}": cfg["smooth_window"],
+        f"poly_{ds_id}": cfg["smooth_poly"],
+        f"norm_{ds_id}": cfg["normalize"],
+        f"wlcol_{ds_id}": cfg["wl_col"],
+        f"intcol_{ds_id}": cfg["int_col"],
     }
-    for k, v in mapping.items():
+
+def prime_widget_state_for_dialog(ds_id: str, cfg: dict):
+    """
+    Pre-carga st.session_state *antes* de crear los widgets del diálogo.
+    Esto evita el error StreamlitAPIException de intentar modificar el estado
+    de widgets ya instanciados.
+    """
+    prime_key = f"prime_{ds_id}"
+    if st.session_state.get(prime_key, False):
+        return
+    for k, v in _widget_mapping(ds_id, cfg).items():
         st.session_state[k] = v
+    st.session_state[prime_key] = True
+
 
 # ----------------- Modal manager (sin st.rerun manual) -----------------
 if "active_dialog_id" not in st.session_state:
@@ -541,6 +557,8 @@ if "active_dialog_id" not in st.session_state:
 
 def request_open_dialog(ds_id: str):
     st.session_state["active_dialog_id"] = ds_id
+    # Fuerza a re-cargar valores del formulario desde cfg cuando se abra el diálogo.
+    st.session_state[f"prime_{ds_id}"] = False
 
 def maybe_open_dialog(datasets_by_id: dict):
     ds_id = st.session_state.get("active_dialog_id")
@@ -554,24 +572,28 @@ def maybe_open_dialog(datasets_by_id: dict):
         @st.dialog(title)
         def _dlg():
             cfg_inner = get_cfg(ds)
+            prime_widget_state_for_dialog(ds_id, cfg_inner)
             with st.form(key=f"form_{ds_id}"):
                 new_cfg = render_cfg_form(ds, cfg_inner)
                 submitted = st.form_submit_button("Guardar")
             if submitted:
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
-                sync_widget_state(ds_id, new_cfg)
                 st.session_state["active_dialog_id"] = None
+                st.session_state[f"prime_{ds_id}"] = False
                 st.success("Guardado")
+                st.rerun()
         _dlg()
     else:
         with st.expander(title, expanded=True):
             cfg_inner = get_cfg(ds)
+            prime_widget_state_for_dialog(ds_id, cfg_inner)
             new_cfg = render_cfg_form(ds, cfg_inner)
             if st.button("Guardar", key=f"save_{ds_id}"):
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
-                sync_widget_state(ds_id, new_cfg)
                 st.session_state["active_dialog_id"] = None
+                st.session_state[f"prime_{ds_id}"] = False
                 st.success("Guardado")
+                st.rerun()
 
 # ----------------- Figura CIE -----------------
 fig, ax = plt.subplots(figsize=(7, 7))
