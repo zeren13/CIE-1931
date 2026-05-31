@@ -11,7 +11,7 @@ from matplotlib.font_manager import FontProperties
 import colour
 from colour import MSDS_CMFS
 
-# Opcional: Savitzky–Golay si SciPy está instalado
+# Optional: Savitzky-Golay if SciPy is installed
 try:
     from scipy.signal import savgol_filter  # type: ignore
     _HAS_SCIPY = True
@@ -24,66 +24,66 @@ matplotlib.rcParams.update({'font.size': 12})
 DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
 HAS_DIALOG = callable(DIALOG_DECORATOR)
 
-st.title("CIE 1931 — Coordenadas cromáticas desde espectros de emisión")
+st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
 
 # ----------------- Sidebar (global) -----------------
-st.sidebar.header("Parámetros globales")
-wl_min_default = st.sidebar.number_input("λ mínimo (nm)", min_value=200, max_value=10000, value=380)
-wl_max_default = st.sidebar.number_input("λ máximo (nm)", min_value=200, max_value=10000, value=780)
-interp_interval_default = st.sidebar.selectbox("Intervalo de interpolación (nm)", options=[1, 2, 5, 10], index=2)
-dpi_save = st.sidebar.number_input("DPI para exportar imagen TIFF", min_value=72, max_value=1200, value=600)
+st.sidebar.header("Global parameters")
+wl_min_default = st.sidebar.number_input("Minimum wavelength (nm)", min_value=200, max_value=10000, value=380)
+wl_max_default = st.sidebar.number_input("Maximum wavelength (nm)", min_value=200, max_value=10000, value=780)
+interp_interval_default = st.sidebar.selectbox("Interpolation interval (nm)", options=[1, 2, 5, 10], index=2)
+dpi_save = st.sidebar.number_input("DPI for TIFF export", min_value=72, max_value=1200, value=600)
 
-# ---- Personalización del diagrama (se conserva) ----
+# ---- Diagram customization ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("Personalización del diagrama")
+st.sidebar.subheader("Diagram customization")
 
-plot_title = st.sidebar.text_input("Título del gráfico", value="Diagrama cromático CIE 1931")
-x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="x-chromaticity coordinate")
-y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="y-chromaticity coordinate")
+plot_title = st.sidebar.text_input("Plot title", value="CIE 1931 chromaticity diagram")
+x_axis_label = st.sidebar.text_input("X-axis label", value="x-chromaticity coordinate")
+y_axis_label = st.sidebar.text_input("Y-axis label", value="y-chromaticity coordinate")
 
 def _safe_mpl_text(s: str) -> str:
-    """Evita caídas de Matplotlib por mathtext inválido.
+    """Avoid Matplotlib failures caused by invalid mathtext.
 
-    Matplotlib intenta interpretar mathtext si ve '$'. Si el usuario escribe un
-    '$' suelto (o impar), puede explotar en tight_layout.
+    Matplotlib tries to interpret mathtext when it sees '$'. If the user enters
+    one '$' by itself, tight_layout can fail.
     """
     s = "" if s is None else str(s)
     if s.count("$") % 2 == 1:
         s = s.replace("$", "")
     return s
 
-title_color = st.sidebar.color_picker("Color del título", "#000000")
-axes_color = st.sidebar.color_picker("Color de ejes y ticks", "#000000")
-locus_label_color = st.sidebar.color_picker("Color de etiquetas λ (números)", "#000000")
+title_color = st.sidebar.color_picker("Title color", "#000000")
+axes_color = st.sidebar.color_picker("Axes and tick color", "#000000")
+locus_label_color = st.sidebar.color_picker("Wavelength label color (numbers)", "#000000")
 
-title_font_family = st.sidebar.selectbox("Fuente del título", options=["sans-serif", "serif", "monospace"], index=0)
-title_font_size = st.sidebar.number_input("Tamaño fuente título", min_value=8, max_value=48, value=14)
+title_font_family = st.sidebar.selectbox("Title font", options=["sans-serif", "serif", "monospace"], index=0)
+title_font_size = st.sidebar.number_input("Title font size", min_value=8, max_value=48, value=14)
 
-tick_font_family = st.sidebar.selectbox("Fuente ticks", options=["sans-serif", "serif", "monospace"], index=0)
-tick_font_size = st.sidebar.number_input("Tamaño ticks", min_value=6, max_value=24, value=10)
+tick_font_family = st.sidebar.selectbox("Tick font", options=["sans-serif", "serif", "monospace"], index=0)
+tick_font_size = st.sidebar.number_input("Tick size", min_value=6, max_value=24, value=10)
 
-locus_numbers_font_family = st.sidebar.selectbox("Fuente números λ (locus)", options=["sans-serif", "serif", "monospace"], index=0)
-locus_numbers_font_size = st.sidebar.number_input("Tamaño números λ (locus)", min_value=6, max_value=24, value=8)
+locus_numbers_font_family = st.sidebar.selectbox("Wavelength number font (locus)", options=["sans-serif", "serif", "monospace"], index=0)
+locus_numbers_font_size = st.sidebar.number_input("Wavelength number size (locus)", min_value=6, max_value=24, value=8)
 
-axes_linewidth = st.sidebar.slider("Grosor de ejes (spines)", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
+axes_linewidth = st.sidebar.slider("Axis spine width", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
 
-show_point_labels = st.sidebar.checkbox("Mostrar etiquetas junto a cada punto", value=True)
+show_point_labels = st.sidebar.checkbox("Show labels next to each point", value=True)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Leyenda")
-legend_loc = st.sidebar.selectbox("Ubicación", options=[
+st.sidebar.subheader("Legend")
+legend_loc = st.sidebar.selectbox("Location", options=[
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center", "center"
 ], index=0)
-legend_font_size = st.sidebar.number_input("Tamaño fuente", min_value=6, max_value=24, value=8)
-legend_ncols = st.sidebar.slider("Columnas", min_value=1, max_value=4, value=1)
-legend_box_color = st.sidebar.color_picker("Fondo", "#FFFFFF")
-legend_box_alpha = st.sidebar.slider("Opacidad fondo", min_value=0.0, max_value=1.0, value=0.85)
-legend_box_linewidth = st.sidebar.slider("Grosor borde", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
+legend_font_size = st.sidebar.number_input("Font size", min_value=6, max_value=24, value=8)
+legend_ncols = st.sidebar.slider("Columns", min_value=1, max_value=4, value=1)
+legend_box_color = st.sidebar.color_picker("Background", "#FFFFFF")
+legend_box_alpha = st.sidebar.slider("Background opacity", min_value=0.0, max_value=1.0, value=0.85)
+legend_box_linewidth = st.sidebar.slider("Border width", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
 
-# ---- λ dominante / pureza (se conserva) ----
+# ---- Dominant wavelength / purity ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("λ dominante / pureza (mejorado)")
+st.sidebar.subheader("Dominant wavelength / purity")
 
 wp_mode = st.sidebar.selectbox("White point", ["E (0.3333, 0.3333)", "D65 (0.3127, 0.3290)", "Custom"], index=0)
 if wp_mode.startswith("E"):
@@ -96,13 +96,13 @@ else:
     WHITE_POINT = (float(wp_x), float(wp_y))
 
 # ----------------- Uploaders -----------------
-st.markdown("### Subir datos")
-st.caption("CSV: uno o varios archivos. XLSX: uno o varios archivos (se procesan todas las hojas).")
+st.markdown("### Upload data")
+st.caption("CSV: one or more files. XLSX: one or more files (all sheets are processed).")
 
-csv_files = st.file_uploader("Sube uno o varios archivos CSV", type=["csv"], accept_multiple_files=True)
-xlsx_files = st.file_uploader("Sube uno o varios archivos Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+csv_files = st.file_uploader("Upload one or more CSV files", type=["csv"], accept_multiple_files=True)
+xlsx_files = st.file_uploader("Upload one or more Excel files (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-# ----------------- Helpers: lectura -----------------
+# ----------------- Helpers: file reading -----------------
 def uploaded_to_bytes(uploaded):
     if uploaded is None:
         return b""
@@ -117,7 +117,7 @@ def uploaded_to_bytes(uploaded):
 
 def read_csv_flexible_bytes(raw: bytes) -> pd.DataFrame:
     if not raw:
-        raise ValueError("Archivo vacío o no se pudo leer.")
+        raise ValueError("The file is empty or could not be read.")
     bio = io.BytesIO(raw)
 
     trials = [
@@ -143,7 +143,7 @@ def read_csv_flexible_bytes(raw: bytes) -> pd.DataFrame:
     except Exception as e:
         last_err = e
 
-    raise ValueError(f"No pude leer el CSV (separador/decimal). Último error: {last_err}")
+    raise ValueError(f"Could not read the CSV file (separator/decimal format). Last error: {last_err}")
 
 @st.cache_data(show_spinner=False)
 def load_csv_df(raw: bytes) -> pd.DataFrame:
@@ -158,10 +158,10 @@ def list_excel_sheets(raw: bytes):
 def load_excel_sheet(raw: bytes, sheet: str) -> pd.DataFrame:
     return pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
 
-# ----------------- Helpers: columnas (autodetección) -----------------
+# ----------------- Helpers: columns (auto-detection) -----------------
 _WL_HINTS = [
     "wavelength", "wavelength (nm)", "lambda", "wl", "nm",
-    "longitud de onda", "longitud_de_onda", "longitud", "onda"
+    "wavelength", "wavelength", "wavelength", "wave"
 ]
 _INT_HINTS = [
     "intensity", "intensity (a.u.)", "a.u.", "au", "counts", "cps", "signal",
@@ -169,7 +169,7 @@ _INT_HINTS = [
 ]
 
 def _norm_colname(c):
-    return str(c).strip().lower().replace("\ufeff", "").replace("µ", "u")
+    return str(c).strip().lower().replace("\ufeff", "").replace("\u00b5", "u")
 
 def guess_columns(df: pd.DataFrame):
     cols = list(df.columns)
@@ -208,7 +208,7 @@ def guess_columns(df: pd.DataFrame):
 def to_numeric_series(s: pd.Series):
     return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
 
-# ----------------- CMFs arrays (sin deepcopy) -----------------
+# ----------------- CMF arrays (no deepcopy) -----------------
 @st.cache_data(show_spinner=False)
 def cmfs_arrays():
     cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
@@ -243,7 +243,7 @@ def locus_arrays(wl_start=380, wl_end=780):
 
 LOCUS_WLS_F, LOCUS_XY = locus_arrays(380, 780)
 
-# ----------------- Geometría: λ dominante/pureza -----------------
+# ----------------- Geometry: dominant wavelength / purity -----------------
 def _cross2(a, b):
     return a[0] * b[1] - a[1] * b[0]
 
@@ -322,7 +322,7 @@ def dominant_wavelength_and_purity(x, y, white_point=(0.3333, 0.3333)):
     wl_comp = wl0 + u2 * (wl1 - wl0)
     return wl_comp, purity, "Complementary"
 
-# ----------------- Integración numérica: espectro -> xy -----------------
+# ----------------- Numerical integration: spectrum -> xy -----------------
 def spectrum_to_xy(wl_grid, intensity_grid):
     xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
     ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
@@ -335,10 +335,10 @@ def spectrum_to_xy(wl_grid, intensity_grid):
 
     S = X + Y + Z
     if not np.isfinite(S) or S <= 0:
-        raise ValueError("XYZ inválido (intensidades ~0 en el rango).")
+        raise ValueError("Invalid XYZ values (intensities are near zero in the selected range).")
     return X / S, Y / S
 
-# ----------------- Preprocesamiento -----------------
+# ----------------- Preprocessing -----------------
 def preprocess_spectrum(df, wl_col, int_col,
                         wl_min_local, wl_max_local, interp_interval_local,
                         clip_negative=False,
@@ -353,7 +353,7 @@ def preprocess_spectrum(df, wl_col, int_col,
     out = out.dropna()
     out = out[(out["wavelength"] >= wl_min_local) & (out["wavelength"] <= wl_max_local)].copy()
     if out.empty:
-        raise ValueError("No hay datos en el rango seleccionado.")
+        raise ValueError("No data found in the selected wavelength range.")
     out = out.sort_values("wavelength")
     out = out.groupby("wavelength", as_index=False)["intensity"].mean()
 
@@ -378,13 +378,15 @@ def preprocess_spectrum(df, wl_col, int_col,
         kernel = np.ones(w, dtype=float) / w
         intensity_grid = np.convolve(intensity_grid, kernel, mode="same")
     elif smooth_method == "Savitzky-Golay" and _HAS_SCIPY:
-        w = int(max(5, smooth_window))
+        n = int(len(intensity_grid))
+        w = min(int(max(5, smooth_window)), n if n % 2 == 1 else n - 1)
         if w % 2 == 0:
-            w += 1
+            w -= 1
         p = int(max(2, smooth_poly))
-        if p >= w:
+        if w >= 3 and p >= w:
             p = w - 1
-        intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=p, mode="interp")
+        if w >= 3 and p < w:
+            intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=p, mode="interp")
 
     integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
     if normalize_mode == "Max = 1":
@@ -397,11 +399,11 @@ def preprocess_spectrum(df, wl_col, int_col,
             intensity_grid = intensity_grid / area
 
     if float(np.max(np.abs(intensity_grid))) <= 0:
-        raise ValueError("Intensidad nula en el rango (revisa columnas / rango).")
+        raise ValueError("Zero intensity in the selected range (check columns and range).")
 
     return wl_grid, intensity_grid
 
-# ----------------- Construir datasets -----------------
+# ----------------- Build datasets -----------------
 datasets = []
 
 if csv_files:
@@ -413,7 +415,7 @@ if csv_files:
             df = load_csv_df(raw)
             datasets.append({"id": f"csv_{i}", "name": f.name, "df": df})
         except Exception as e:
-            st.error(f"Error leyendo CSV {f.name}: {e}")
+            st.error(f"Error reading CSV {f.name}: {e}")
 
 if xlsx_files:
     for j, f in enumerate(xlsx_files):
@@ -423,16 +425,16 @@ if xlsx_files:
         try:
             sheets = list_excel_sheets(raw)
         except Exception as e:
-            st.error(f"Error leyendo Excel {f.name}: {e}")
+            st.error(f"Error reading Excel {f.name}: {e}")
             continue
         for k, sh in enumerate(sheets):
             try:
                 df = load_excel_sheet(raw, sh)
-                datasets.append({"id": f"xlsx_{j}_{k}", "name": f"{f.name} — {sh}", "df": df})
+                datasets.append({"id": f"xlsx_{j}_{k}", "name": f"{f.name} - {sh}", "df": df})
             except Exception as e:
-                st.error(f"Error leyendo {f.name} | hoja {sh}: {e}")
+                st.error(f"Error reading {f.name} | sheet {sh}: {e}")
 
-# ----------------- Config por dataset -----------------
+# ----------------- Per-dataset configuration -----------------
 def init_cfg(ds):
     df = ds["df"]
     cols = list(df.columns)
@@ -470,48 +472,50 @@ def get_cfg(ds):
 
 
 def render_cfg_form(ds, cfg, key_prefix="dlg_"):
-    """Formulario de configuración por muestra.
-    key_prefix evita colisiones con otros widgets y permite que Streamlit maneje bien el estado.
+    """Per-sample configuration form.
+    key_prefix avoids widget-key collisions and lets Streamlit manage state reliably.
     """
     ds_id = ds["id"]
     keyp = f"{key_prefix}{ds_id}_"
+    cols = list(ds["df"].columns)
 
-    st.markdown("Columnas")
-    wl_col = st.selectbox("Columna de longitud de onda", options=list(ds["df"].columns),
-                          index=list(ds["df"].columns).index(cfg["wl_col"]) if cfg["wl_col"] in ds["df"].columns else 0,
+    st.markdown("Columns")
+    wl_col = st.selectbox("Wavelength column", options=cols,
+                          index=cols.index(cfg["wl_col"]) if cfg["wl_col"] in cols else 0,
                           key=f"{keyp}wlcol")
-    int_col = st.selectbox("Columna de intensidad", options=list(ds["df"].columns),
-                           index=list(ds["df"].columns).index(cfg["int_col"]) if cfg["int_col"] in ds["df"].columns else 1,
+    int_default_index = cols.index(cfg["int_col"]) if cfg["int_col"] in cols else min(1, len(cols) - 1)
+    int_col = st.selectbox("Intensity column", options=cols,
+                           index=int_default_index,
                            key=f"{keyp}intcol")
 
-    st.markdown("Estilo del punto")
+    st.markdown("Point style")
     label = st.text_input("Label", value=cfg["label"], key=f"{keyp}label")
     color = st.color_picker("Color", value=cfg["color"], key=f"{keyp}color")
     marker_opts = ['o','s','^','x','D','*','v']
     marker = st.selectbox("Marker", options=marker_opts,
                           index=marker_opts.index(cfg["marker"]) if cfg["marker"] in marker_opts else 0,
                           key=f"{keyp}marker")
-    size = st.slider("Tamaño (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"{keyp}size")
+    size = st.slider("Size (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"{keyp}size")
 
-    st.markdown("Rango para cálculo")
-    wl_min = st.number_input("λ min (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"{keyp}wlmin")
-    wl_max = st.number_input("λ max (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"{keyp}wlmax")
+    st.markdown("Calculation range")
+    wl_min = st.number_input("Min wavelength (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"{keyp}wlmin")
+    wl_max = st.number_input("Max wavelength (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"{keyp}wlmax")
     interp_opts = [1,2,5,10]
-    interp = st.selectbox("Intervalo (nm)", options=interp_opts,
+    interp = st.selectbox("Interval (nm)", options=interp_opts,
                           index=interp_opts.index(int(cfg["interp"])) if int(cfg["interp"]) in interp_opts else 1,
                           key=f"{keyp}interp")
 
-    st.markdown("Preprocesamiento")
-    baseline_subtract_min = st.checkbox("Baseline: restar el mínimo (llevar a 0)", value=bool(cfg["baseline_subtract_min"]), key=f"{keyp}base")
-    clip_negative = st.checkbox("Recortar intensidades negativas a 0", value=bool(cfg["clip_negative"]), key=f"{keyp}clip")
+    st.markdown("Preprocessing")
+    baseline_subtract_min = st.checkbox("Baseline: subtract minimum (shift to 0)", value=bool(cfg["baseline_subtract_min"]), key=f"{keyp}base")
+    clip_negative = st.checkbox("Clip negative intensities to 0", value=bool(cfg["clip_negative"]), key=f"{keyp}clip")
 
     smooth_options = ["None", "Moving average"] + (["Savitzky-Golay"] if _HAS_SCIPY else [])
-    smooth_method = st.selectbox("Suavizado", options=smooth_options,
+    smooth_method = st.selectbox("Smoothing", options=smooth_options,
                                  index=smooth_options.index(cfg["smooth_method"]) if cfg["smooth_method"] in smooth_options else 0,
                                  key=f"{keyp}smooth")
-    smooth_window = st.slider("Ventana (suavizado)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"{keyp}win")
-    smooth_poly = st.slider("Orden polinómico (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"{keyp}poly")
-    normalize = st.selectbox("Normalización", options=["None", "Max = 1", "Area = 1"],
+    smooth_window = st.slider("Window (smoothing)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"{keyp}win")
+    smooth_poly = st.slider("Polynomial order (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"{keyp}poly")
+    normalize = st.selectbox("Normalization", options=["None", "Max = 1", "Area = 1"],
                              index=["None","Max = 1","Area = 1"].index(cfg["normalize"]) if cfg["normalize"] in ["None","Max = 1","Area = 1"] else 0,
                              key=f"{keyp}norm")
 
@@ -534,7 +538,7 @@ def render_cfg_form(ds, cfg, key_prefix="dlg_"):
     }
 
 
-# ----------------- Configuración por muestra (modal) -----------------
+# ----------------- Per-sample configuration (modal) -----------------
 if "open_cfg_id" not in st.session_state:
     st.session_state["open_cfg_id"] = None
 
@@ -543,8 +547,8 @@ def request_open_config(ds_id: str):
     st.rerun()
 
 def handle_config_dialog(datasets_by_id):
-    """Si hay una muestra seleccionada, abre el diálogo y detiene el resto del script.
-    Esto evita que la app siga calculando con la config vieja en el mismo run.
+    """If a sample is selected, open the dialog and stop the rest of the script.
+    This prevents the app from calculating with stale config during the same run.
     """
     ds_id = st.session_state.get("open_cfg_id", None)
     if not ds_id:
@@ -556,7 +560,7 @@ def handle_config_dialog(datasets_by_id):
         return
 
     cfg = get_cfg(ds)
-    title = f"Configurar: {ds['name']}"
+    title = f"Configure: {ds['name']}"
 
     if HAS_DIALOG:
         @DIALOG_DECORATOR(title)
@@ -565,9 +569,9 @@ def handle_config_dialog(datasets_by_id):
                 new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
                 cA, cB = st.columns(2)
                 with cA:
-                    submitted = st.form_submit_button("Guardar")
+                    submitted = st.form_submit_button("Save")
                 with cB:
-                    cancelled = st.form_submit_button("Cancelar")
+                    cancelled = st.form_submit_button("Cancel")
             if submitted:
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
                 st.session_state["open_cfg_id"] = None
@@ -582,11 +586,11 @@ def handle_config_dialog(datasets_by_id):
         with st.expander(title, expanded=True):
             new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
             cA, cB = st.columns(2)
-            if cA.button("Guardar", key=f"save_{ds_id}"):
+            if cA.button("Save", key=f"save_{ds_id}"):
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
                 st.session_state["open_cfg_id"] = None
                 st.rerun()
-            if cB.button("Cancelar", key=f"cancel_{ds_id}"):
+            if cB.button("Cancel", key=f"cancel_{ds_id}"):
                 st.session_state["open_cfg_id"] = None
                 st.rerun()
         st.stop()
@@ -594,7 +598,7 @@ def handle_config_dialog(datasets_by_id):
 datasets_by_id = {ds['id']: ds for ds in datasets}
 handle_config_dialog(datasets_by_id)
 
-# ----------------- Figura CIE
+# ----------------- CIE figure
 fig, ax = plt.subplots(figsize=(7, 7))
 try:
     try:
@@ -660,13 +664,13 @@ try:
 except Exception:
     pass
 
-# ----------------- Procesar -----------------
+# ----------------- Process -----------------
 results = []
 spectra_to_plot = []
 
 if datasets:
-    st.markdown("### Muestras")
-    st.caption("Opciones por muestra: botón Configurar (ventana emergente). Espectros: en desplegable aparte.")
+    st.markdown("### Samples")
+    st.caption("Per-sample options: Configure button (popup dialog). Spectra are shown in a separate expander.")
 
     for ds in datasets:
         cfg = get_cfg(ds)
@@ -675,19 +679,19 @@ if datasets:
         with c1:
             st.write(ds["name"])
         with c2:
-            if st.button("Configurar", key=f"btn_cfg_{ds['id']}"):
+            if st.button("Configure", key=f"btn_cfg_{ds['id']}"):
                 request_open_config(ds["id"])
         with c3:
-            st.write(f"λ: {cfg['wl_min']}–{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
+            st.write(f"Wavelength: {cfg['wl_min']}-{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
 
         try:
             df = ds["df"]
             if cfg["wl_min"] >= cfg["wl_max"]:
-                raise ValueError("λ min debe ser menor que λ max.")
+                raise ValueError("Minimum wavelength must be lower than maximum wavelength.")
             if cfg["wl_min"] < CMF_MIN or cfg["wl_max"] > CMF_MAX:
-                raise ValueError(f"El rango debe estar dentro de las CMFs: {CMF_MIN:.0f}–{CMF_MAX:.0f} nm.")
+                raise ValueError(f"The range must be within the CMF domain: {CMF_MIN:.0f}-{CMF_MAX:.0f} nm.")
             if cfg["wl_col"] not in df.columns or cfg["int_col"] not in df.columns:
-                raise ValueError("Columnas seleccionadas no existen en este archivo/hoja.")
+                raise ValueError("Selected columns do not exist in this file/sheet.")
 
             wl_grid, intensity_grid = preprocess_spectrum(
                 df, cfg["wl_col"], cfg["int_col"],
@@ -736,13 +740,13 @@ if datasets:
                 "color": cfg["color"]
             })
 
-            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | λ({wl_kind})={wl_dom:.1f} nm | pureza={purity:.1f}%")
+            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | wavelength ({wl_kind})={wl_dom:.1f} nm | purity={purity:.1f}%")
         except Exception as e:
             st.error(f"{cfg['label']}: {e}")
 else:
-    st.info("Sube archivos para comenzar.")
+    st.info("Upload files to begin.")
 
-# ----------------- Salidas -----------------
+# ----------------- Outputs -----------------
 if results:
     try:
         legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
@@ -756,7 +760,7 @@ if results:
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.markdown("### Diagrama CIE 1931")
+        st.markdown("### CIE 1931 diagram")
         try:
             plt.tight_layout()
         except Exception:
@@ -764,7 +768,7 @@ if results:
         st.pyplot(fig)
 
     with col_right:
-        with st.expander("Espectros de emisión (procesados para el cálculo)", expanded=False):
+        with st.expander("Emission spectra (processed for calculation)", expanded=False):
             if spectra_to_plot:
                 fig_s, ax_s = plt.subplots(figsize=(3.5, 3.5))
                 for s in spectra_to_plot:
@@ -778,17 +782,17 @@ if results:
                     pass
                 st.pyplot(fig_s)
             else:
-                st.info("No hay espectros para mostrar.")
+                st.info("No spectra to display.")
 
-    st.markdown("### Tabla de coordenadas")
+    st.markdown("### Coordinate table")
     results_df = pd.DataFrame(results)
     st.dataframe(results_df)
 
     csv_buf = io.StringIO()
     results_df.to_csv(csv_buf, index=False)
-    st.download_button("Descargar tabla CSV", data=csv_buf.getvalue(), file_name="coordenadas_CIE1931.csv", mime="text/csv")
+    st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
 
     img_buf = io.BytesIO()
     fig.savefig(img_buf, format="tiff", dpi=dpi_save)
     img_buf.seek(0)
-    st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="diagrama_CIE1931.tiff", mime="image/tiff")
+    st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
