@@ -24,6 +24,46 @@ matplotlib.rcParams.update({'font.size': 12})
 DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
 HAS_DIALOG = callable(DIALOG_DECORATOR)
 
+if "active_page" not in st.session_state:
+    st.session_state["active_page"] = "Inicio"
+
+def go_to_page(page_name: str):
+    st.session_state["active_page"] = page_name
+    st.rerun()
+
+if st.session_state["active_page"] == "Inicio":
+    st.title("CIE 1931 - Emission spectra analysis")
+    st.caption("Herramienta para calcular coordenadas cromaticas CIE 1931 desde espectros de emision.")
+
+    tab_home, tab_cie, tab_spectra = st.tabs(["Inicio", "Analisis CIE 1931", "Espectros de emision"])
+
+    with tab_home:
+        st.markdown("### Bienvenido")
+        st.write(
+            "Desde esta pagina puedes ir al modulo de analisis, cargar tus archivos CSV/XLSX, "
+            "configurar cada compuesto y visualizar los resultados."
+        )
+        if st.button("Ir al analisis CIE 1931", type="primary"):
+            go_to_page("Analisis CIE 1931")
+
+    with tab_cie:
+        st.markdown("### Analisis CIE 1931")
+        st.write("Carga los espectros, calcula coordenadas x,y, longitud dominante y pureza de excitacion.")
+        if st.button("Abrir modulo CIE 1931", key="open_cie_from_tab"):
+            go_to_page("Analisis CIE 1931")
+
+    with tab_spectra:
+        st.markdown("### Espectros de emision")
+        st.write("Visualiza los espectros procesados y personaliza el color de linea para cada compuesto.")
+        if st.button("Abrir espectros", key="open_spectra_from_tab"):
+            go_to_page("Analisis CIE 1931")
+
+    st.stop()
+
+st.sidebar.header("Navigation")
+if st.sidebar.button("Inicio"):
+    go_to_page("Inicio")
+
 st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
 
 # ----------------- Sidebar (global) -----------------
@@ -442,6 +482,7 @@ def init_cfg(ds):
     return {
         "label": ds["name"],
         "color": "#000000",
+        "spectrum_color": "#1f77b4",
         "marker": "o",
         "size": 120,
         "wl_col": wl_guess if wl_guess in cols else (cols[0] if cols else None),
@@ -467,6 +508,8 @@ def get_cfg(ds):
         cfg["wl_col"] = cols[0]
     if cfg.get("int_col") not in cols and cols:
         cfg["int_col"] = cols[1] if len(cols) > 1 else cols[0]
+    if "spectrum_color" not in cfg:
+        cfg["spectrum_color"] = cfg.get("color", "#1f77b4")
     st.session_state[key] = cfg
     return cfg
 
@@ -491,6 +534,7 @@ def render_cfg_form(ds, cfg, key_prefix="dlg_"):
     st.markdown("Point style")
     label = st.text_input("Label", value=cfg["label"], key=f"{keyp}label")
     color = st.color_picker("Color", value=cfg["color"], key=f"{keyp}color")
+    spectrum_color = st.color_picker("Spectrum line color", value=cfg["spectrum_color"], key=f"{keyp}spectrum_color")
     marker_opts = ['o','s','^','x','D','*','v']
     marker = st.selectbox("Marker", options=marker_opts,
                           index=marker_opts.index(cfg["marker"]) if cfg["marker"] in marker_opts else 0,
@@ -522,6 +566,7 @@ def render_cfg_form(ds, cfg, key_prefix="dlg_"):
     return {
         "label": label,
         "color": color,
+        "spectrum_color": spectrum_color,
         "marker": marker,
         "size": int(size),
         "wl_col": wl_col,
@@ -670,7 +715,7 @@ spectra_to_plot = []
 
 if datasets:
     st.markdown("### Samples")
-    st.caption("Per-sample options: Configure button (popup dialog). Spectra are shown in a separate expander.")
+    st.caption("Per-sample options: Configure button (popup dialog). Results are organized in tabs below.")
 
     for ds in datasets:
         cfg = get_cfg(ds)
@@ -737,7 +782,7 @@ if datasets:
                 "label": cfg["label"],
                 "wl": wl_grid,
                 "it": intensity_grid,
-                "color": cfg["color"]
+                "color": cfg.get("spectrum_color", cfg["color"])
             })
 
             st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | wavelength ({wl_kind})={wl_dom:.1f} nm | purity={purity:.1f}%")
@@ -757,9 +802,9 @@ if results:
     except Exception:
         pass
 
-    col_left, col_right = st.columns([2, 1])
+    tab_cie, tab_spectra, tab_table = st.tabs(["CIE 1931 diagram", "Emission spectra", "Coordinate table"])
 
-    with col_left:
+    with tab_cie:
         st.markdown("### CIE 1931 diagram")
         try:
             plt.tight_layout()
@@ -767,32 +812,35 @@ if results:
             pass
         st.pyplot(fig)
 
-    with col_right:
-        with st.expander("Emission spectra (processed for calculation)", expanded=False):
-            if spectra_to_plot:
-                fig_s, ax_s = plt.subplots(figsize=(3.5, 3.5))
-                for s in spectra_to_plot:
-                    ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"])
-                ax_s.set_xlabel("Wavelength (nm)")
-                ax_s.set_ylabel("Intensity (a.u.)")
-                ax_s.tick_params(labelsize=8)
-                try:
-                    ax_s.legend(fontsize=7, loc="best")
-                except Exception:
-                    pass
-                st.pyplot(fig_s)
-            else:
-                st.info("No spectra to display.")
+    with tab_spectra:
+        st.markdown("### Emission spectra")
+        st.caption("Line colors are configured for each compound from the Configure button.")
+        if spectra_to_plot:
+            fig_s, ax_s = plt.subplots(figsize=(7, 4.5))
+            for s in spectra_to_plot:
+                ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"], linewidth=1.8)
+            ax_s.set_xlabel("Wavelength (nm)")
+            ax_s.set_ylabel("Intensity (a.u.)")
+            ax_s.tick_params(labelsize=10)
+            ax_s.grid(alpha=0.25)
+            try:
+                ax_s.legend(fontsize=8, loc="best")
+            except Exception:
+                pass
+            st.pyplot(fig_s)
+        else:
+            st.info("No spectra to display.")
 
-    st.markdown("### Coordinate table")
-    results_df = pd.DataFrame(results)
-    st.dataframe(results_df)
+    with tab_table:
+        st.markdown("### Coordinate table")
+        results_df = pd.DataFrame(results)
+        st.dataframe(results_df)
 
-    csv_buf = io.StringIO()
-    results_df.to_csv(csv_buf, index=False)
-    st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
+        csv_buf = io.StringIO()
+        results_df.to_csv(csv_buf, index=False)
+        st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
 
-    img_buf = io.BytesIO()
-    fig.savefig(img_buf, format="tiff", dpi=dpi_save)
-    img_buf.seek(0)
-    st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
+        img_buf = io.BytesIO()
+        fig.savefig(img_buf, format="tiff", dpi=dpi_save)
+        img_buf.seek(0)
+        st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
