@@ -95,6 +95,15 @@ else:
     wp_y = st.sidebar.number_input("White point y", min_value=0.0, max_value=1.0, value=0.3333, step=0.0001, format="%.4f")
     WHITE_POINT = (float(wp_x), float(wp_y))
 
+# ---- Advanced analysis ----
+st.sidebar.markdown("---")
+st.sidebar.subheader("Analysis tools")
+show_xyz_columns = st.sidebar.checkbox("Include XYZ and u'v' coordinates", value=True)
+show_spectral_metrics = st.sidebar.checkbox("Include spectral metrics", value=True)
+show_distance_matrix = st.sidebar.checkbox("Show chromaticity distance matrix", value=True)
+show_quality_flags = st.sidebar.checkbox("Show data quality flags", value=True)
+show_peak_guides = st.sidebar.checkbox("Show peak/FWHM guides in spectra plot", value=True)
+
 # ----------------- Uploaders -----------------
 st.markdown("### Upload data")
 st.caption("CSV: one or more files. XLSX: one or more files (all sheets are processed).")
@@ -322,8 +331,8 @@ def dominant_wavelength_and_purity(x, y, white_point=(0.3333, 0.3333)):
     wl_comp = wl0 + u2 * (wl1 - wl0)
     return wl_comp, purity, "Complementary"
 
-# ----------------- Numerical integration: spectrum -> xy -----------------
-def spectrum_to_xy(wl_grid, intensity_grid):
+# ----------------- Numerical integration: spectrum -> color coordinates -----------------
+def spectrum_to_xyz_xy(wl_grid, intensity_grid):
     xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
     ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
     zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
@@ -336,7 +345,94 @@ def spectrum_to_xy(wl_grid, intensity_grid):
     S = X + Y + Z
     if not np.isfinite(S) or S <= 0:
         raise ValueError("Invalid XYZ values (intensities are near zero in the selected range).")
-    return X / S, Y / S
+    return X, Y, Z, X / S, Y / S
+
+def spectrum_to_xy(wl_grid, intensity_grid):
+    _, _, _, x, y = spectrum_to_xyz_xy(wl_grid, intensity_grid)
+    return x, y
+
+def xy_to_upvp(x, y):
+    den = (-2.0 * x) + (12.0 * y) + 3.0
+    if not np.isfinite(den) or abs(den) < 1e-15:
+        return np.nan, np.nan
+    return (4.0 * x) / den, (9.0 * y) / den
+
+def estimate_cct_mccamy(x, y):
+    """Approximate CCT in kelvin using McCamy's formula; useful as a quick guide."""
+    den = 0.1858 - y
+    if not np.isfinite(den) or abs(den) < 1e-15:
+        return np.nan
+    n = (x - 0.3320) / den
+    cct = (-449.0 * n**3) + (3525.0 * n**2) - (6823.3 * n) + 5520.33
+    return float(cct) if np.isfinite(cct) and cct > 0 else np.nan
+
+def spectral_metrics(wl_grid, intensity_grid):
+    wl = np.asarray(wl_grid, dtype=float)
+    it = np.asarray(intensity_grid, dtype=float)
+    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+
+    def _linear_crossing(x0, y0, x1, y1, target):
+        if abs(y1 - y0) < 1e-15:
+            return float(x0)
+        return float(x0 + (target - y0) * (x1 - x0) / (y1 - y0))
+
+    area = float(integrate(it, wl))
+    abs_area = float(integrate(np.abs(it), wl))
+    peak_idx = int(np.nanargmax(it))
+    peak_wl = float(wl[peak_idx])
+    peak_intensity = float(it[peak_idx])
+    centroid = float(integrate(wl * it, wl) / area) if area > 0 else np.nan
+
+    half_max = peak_intensity / 2.0
+    above = np.where(it >= half_max)[0]
+    fwhm = np.nan
+    left_half = np.nan
+    right_half = np.nan
+    if len(above) >= 2 and peak_intensity > 0:
+        left_i = int(above[0])
+        right_i = int(above[-1])
+
+        if left_i > 0:
+            left_half = _linear_crossing(wl[left_i - 1], it[left_i - 1], wl[left_i], it[left_i], half_max)
+        else:
+            left_half = float(wl[left_i])
+
+        if right_i < len(it) - 1:
+            right_half = _linear_crossing(wl[right_i], it[right_i], wl[right_i + 1], it[right_i + 1], half_max)
+        else:
+            right_half = float(wl[right_i])
+
+        fwhm = float(right_half - left_half)
+
+    negative_fraction = float(np.mean(it < 0)) if len(it) else np.nan
+    dynamic_range = float(peak_intensity / np.nanmedian(np.abs(it))) if np.nanmedian(np.abs(it)) > 0 else np.nan
+
+    return {
+        "Peak_nm": peak_wl,
+        "Peak_intensity": peak_intensity,
+        "Centroid_nm": centroid,
+        "FWHM_nm": fwhm,
+        "FWHM_left_nm": left_half,
+        "FWHM_right_nm": right_half,
+        "Integrated_area": area,
+        "Integrated_abs_area": abs_area,
+        "Negative_fraction_%": negative_fraction * 100.0,
+        "Dynamic_range_peak_to_median": dynamic_range,
+    }
+
+def quality_flags(metrics, cfg):
+    flags = []
+    if np.isfinite(metrics.get("Negative_fraction_%", np.nan)) and metrics["Negative_fraction_%"] > 0:
+        flags.append("negative intensities")
+    if np.isfinite(metrics.get("Peak_nm", np.nan)):
+        edge_margin = max(2.0 * float(cfg["interp"]), 1.0)
+        if metrics["Peak_nm"] <= cfg["wl_min"] + edge_margin or metrics["Peak_nm"] >= cfg["wl_max"] - edge_margin:
+            flags.append("peak near range edge")
+    if np.isfinite(metrics.get("FWHM_nm", np.nan)) and metrics["FWHM_nm"] <= float(cfg["interp"]):
+        flags.append("FWHM near interpolation limit")
+    if not flags:
+        flags.append("ok")
+    return "; ".join(flags)
 
 # ----------------- Preprocessing -----------------
 def preprocess_spectrum(df, wl_col, int_col,
@@ -704,7 +800,15 @@ if datasets:
                 normalize_mode=cfg["normalize"],
             )
 
-            x_val, y_val = spectrum_to_xy(wl_grid, intensity_grid)
+            X_val, Y_val, Z_val, x_val, y_val = spectrum_to_xyz_xy(wl_grid, intensity_grid)
+            XYZ_sum = X_val + Y_val + Z_val
+            X_norm = X_val / XYZ_sum
+            Y_norm = Y_val / XYZ_sum
+            Z_norm = Z_val / XYZ_sum
+            up_val, vp_val = xy_to_upvp(x_val, y_val)
+            cct_val = estimate_cct_mccamy(x_val, y_val)
+            spec_metrics = spectral_metrics(wl_grid, intensity_grid)
+            flags = quality_flags(spec_metrics, cfg)
             wl_dom, purity, wl_kind = dominant_wavelength_and_purity(x_val, y_val, white_point=WHITE_POINT)
 
             ax.scatter([x_val], [y_val], c=[cfg["color"]], marker=cfg["marker"], s=cfg["size"], label=cfg["label"])
@@ -713,7 +817,7 @@ if datasets:
                         fontsize=tick_font_size, fontfamily=tick_font_family,
                         bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
 
-            results.append({
+            row = {
                 "Label": cfg["label"],
                 "x": float(x_val),
                 "y": float(y_val),
@@ -731,16 +835,41 @@ if datasets:
                 "normalize": cfg["normalize"],
                 "wl_column": cfg["wl_col"],
                 "intensity_column": cfg["int_col"],
-            })
+            }
+
+            if show_xyz_columns:
+                row.update({
+                    "X": float(X_val),
+                    "Y": float(Y_val),
+                    "Z": float(Z_val),
+                    "X_norm": float(X_norm),
+                    "Y_norm": float(Y_norm),
+                    "Z_norm": float(Z_norm),
+                    "u_prime": float(up_val) if np.isfinite(up_val) else np.nan,
+                    "v_prime": float(vp_val) if np.isfinite(vp_val) else np.nan,
+                    "CCT_McCamy_K": float(cct_val) if np.isfinite(cct_val) else np.nan,
+                })
+
+            if show_spectral_metrics:
+                row.update(spec_metrics)
+
+            if show_quality_flags:
+                row["Quality_flags"] = flags
+
+            results.append(row)
 
             spectra_to_plot.append({
                 "label": cfg["label"],
                 "wl": wl_grid,
                 "it": intensity_grid,
-                "color": cfg["color"]
+                "color": cfg["color"],
+                "peak_nm": spec_metrics["Peak_nm"],
+                "fwhm_left_nm": spec_metrics["FWHM_left_nm"],
+                "fwhm_right_nm": spec_metrics["FWHM_right_nm"],
+                "half_max": spec_metrics["Peak_intensity"] / 2.0,
             })
 
-            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | wavelength ({wl_kind})={wl_dom:.1f} nm | purity={purity:.1f}%")
+            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | peak={spec_metrics['Peak_nm']:.1f} nm | wavelength ({wl_kind})={wl_dom:.1f} nm | purity={purity:.1f}%")
         except Exception as e:
             st.error(f"{cfg['label']}: {e}")
 else:
@@ -757,9 +886,23 @@ if results:
     except Exception:
         pass
 
-    col_left, col_right = st.columns([2, 1])
+    results_df = pd.DataFrame(results)
 
-    with col_left:
+    st.markdown("### Results summary")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Samples", len(results_df))
+    m2.metric("Mean x", f"{results_df['x'].mean():.4f}")
+    m3.metric("Mean y", f"{results_df['y'].mean():.4f}")
+    if "Peak_nm" in results_df.columns:
+        m4.metric("Mean peak", f"{results_df['Peak_nm'].mean():.1f} nm")
+    else:
+        m4.metric("White point", f"{WHITE_POINT[0]:.4f}, {WHITE_POINT[1]:.4f}")
+
+    tab_cie, tab_spectra, tab_table, tab_compare, tab_export = st.tabs([
+        "CIE diagram", "Spectra", "Table", "Compare", "Export"
+    ])
+
+    with tab_cie:
         st.markdown("### CIE 1931 diagram")
         try:
             plt.tight_layout()
@@ -767,32 +910,80 @@ if results:
             pass
         st.pyplot(fig)
 
-    with col_right:
-        with st.expander("Emission spectra (processed for calculation)", expanded=False):
-            if spectra_to_plot:
-                fig_s, ax_s = plt.subplots(figsize=(3.5, 3.5))
-                for s in spectra_to_plot:
-                    ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"])
-                ax_s.set_xlabel("Wavelength (nm)")
-                ax_s.set_ylabel("Intensity (a.u.)")
-                ax_s.tick_params(labelsize=8)
-                try:
-                    ax_s.legend(fontsize=7, loc="best")
-                except Exception:
-                    pass
-                st.pyplot(fig_s)
-            else:
-                st.info("No spectra to display.")
+    with tab_spectra:
+        st.markdown("### Emission spectra processed for calculation")
+        if spectra_to_plot:
+            fig_s, ax_s = plt.subplots(figsize=(8, 4.5))
+            for s in spectra_to_plot:
+                ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"])
+                if show_peak_guides:
+                    ax_s.axvline(s["peak_nm"], color=s["color"], linestyle=":", linewidth=1.0, alpha=0.8)
+                    if np.isfinite(s["fwhm_left_nm"]) and np.isfinite(s["fwhm_right_nm"]):
+                        ax_s.hlines(s["half_max"], s["fwhm_left_nm"], s["fwhm_right_nm"],
+                                    color=s["color"], linestyle="--", linewidth=1.0, alpha=0.8)
+            ax_s.set_xlabel("Wavelength (nm)")
+            ax_s.set_ylabel("Intensity (a.u.)")
+            ax_s.grid(alpha=0.25)
+            try:
+                ax_s.legend(fontsize=8, loc="best")
+            except Exception:
+                pass
+            st.pyplot(fig_s)
+        else:
+            st.info("No spectra to display.")
 
-    st.markdown("### Coordinate table")
-    results_df = pd.DataFrame(results)
-    st.dataframe(results_df)
+    with tab_table:
+        st.markdown("### Coordinate and spectral table")
+        st.dataframe(results_df, use_container_width=True)
 
-    csv_buf = io.StringIO()
-    results_df.to_csv(csv_buf, index=False)
-    st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
+    with tab_compare:
+        st.markdown("### Sample comparison")
+        if show_distance_matrix and len(results_df) > 1:
+            labels = results_df["Label"].astype(str).tolist()
+            xy = results_df[["x", "y"]].to_numpy(dtype=float)
+            dist = np.zeros((len(xy), len(xy)), dtype=float)
+            for i in range(len(xy)):
+                for j in range(len(xy)):
+                    dist[i, j] = float(np.linalg.norm(xy[i] - xy[j]))
+            dist_df = pd.DataFrame(dist, index=labels, columns=labels)
+            st.markdown("Chromaticity distance in CIE 1931 xy space")
+            st.dataframe(dist_df.style.format("{:.5f}"), use_container_width=True)
+        elif len(results_df) <= 1:
+            st.info("Upload at least two samples to compare chromaticity distances.")
+        else:
+            st.info("Enable the distance matrix in the sidebar to see pairwise comparisons.")
 
-    img_buf = io.BytesIO()
-    fig.savefig(img_buf, format="tiff", dpi=dpi_save)
-    img_buf.seek(0)
-    st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
+        if {"Peak_nm", "FWHM_nm", "Centroid_nm"}.issubset(results_df.columns):
+            st.markdown("Spectral metrics overview")
+            overview_cols = ["Label", "Peak_nm", "Centroid_nm", "FWHM_nm", "Integrated_area"]
+            st.dataframe(results_df[overview_cols], use_container_width=True)
+
+    with tab_export:
+        st.markdown("### Downloads")
+        csv_buf = io.StringIO()
+        results_df.to_csv(csv_buf, index=False)
+        st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
+
+        xlsx_buf = io.BytesIO()
+        with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
+            results_df.to_excel(writer, sheet_name="results", index=False)
+            if show_distance_matrix and len(results_df) > 1:
+                labels = results_df["Label"].astype(str).tolist()
+                xy = results_df[["x", "y"]].to_numpy(dtype=float)
+                dist = np.zeros((len(xy), len(xy)), dtype=float)
+                for i in range(len(xy)):
+                    for j in range(len(xy)):
+                        dist[i, j] = float(np.linalg.norm(xy[i] - xy[j]))
+                pd.DataFrame(dist, index=labels, columns=labels).to_excel(writer, sheet_name="xy_distances")
+        xlsx_buf.seek(0)
+        st.download_button(
+            "Download Excel workbook",
+            data=xlsx_buf.getvalue(),
+            file_name="CIE1931_analysis.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        img_buf = io.BytesIO()
+        fig.savefig(img_buf, format="tiff", dpi=dpi_save)
+        img_buf.seek(0)
+        st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
