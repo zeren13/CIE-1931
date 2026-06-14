@@ -1055,7 +1055,7 @@ spectra_to_plot = []
 
 if datasets:
     st.markdown("### Samples")
-    st.caption("Per-sample options: Configure button (popup dialog). Results are organized in tabs below.")
+    st.caption("Per-sample options: Configure button (popup dialog). Results are shown in the analysis collage below.")
 
     for ds in datasets:
         cfg = get_cfg(ds)
@@ -1142,9 +1142,28 @@ if results:
     except Exception:
         pass
 
-    tab_cie, tab_spectra, tab_table = st.tabs(["CIE 1931 diagram", "Emission spectra", "Coordinate table"])
+    st.markdown("### Analysis overview")
+    results_df = pd.DataFrame(results)
+    minimal_cols = [
+        "Label",
+        "x",
+        "y",
+        "Wavelength_nm",
+        "Wavelength_type",
+        "Excitation_purity_%",
+    ]
+    minimal_cols = [c for c in minimal_cols if c in results_df.columns]
+    table_df = results_df[minimal_cols].copy()
+    for c in ["x", "y"]:
+        if c in table_df.columns:
+            table_df[c] = table_df[c].map(lambda v: f"{v:.4f}" if np.isfinite(v) else "")
+    for c in ["Wavelength_nm", "Excitation_purity_%"]:
+        if c in table_df.columns:
+            table_df[c] = table_df[c].map(lambda v: f"{v:.1f}" if np.isfinite(v) else "")
 
-    with tab_cie:
+    left_col, right_col = st.columns([1, 1], gap="large")
+
+    with left_col:
         st.markdown("### CIE 1931 diagram")
         try:
             plt.tight_layout()
@@ -1152,35 +1171,33 @@ if results:
             pass
         st.pyplot(fig)
 
-    with tab_spectra:
+    with right_col:
         st.markdown("### Emission spectra")
-        st.caption("Line colors are configured for each compound from the Configure button.")
         if spectra_to_plot:
-            fig_s, ax_s = plt.subplots(figsize=(7, 4.5))
+            fig_s, ax_s = plt.subplots(figsize=(5.5, 3.2))
             for s in spectra_to_plot:
                 ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"], linewidth=1.8)
             ax_s.set_xlabel("Wavelength (nm)")
             ax_s.set_ylabel("Intensity (a.u.)")
-            ax_s.tick_params(labelsize=10)
+            ax_s.tick_params(labelsize=9)
             ax_s.grid(alpha=0.25)
             try:
-                ax_s.legend(fontsize=8, loc="best")
+                ax_s.legend(fontsize=7, loc="best")
             except Exception:
                 pass
             st.pyplot(fig_s)
         else:
             st.info("No spectra to display.")
 
-    with tab_table:
         st.markdown("### Coordinate table")
-        results_df = pd.DataFrame(results)
-        st.dataframe(results_df)
+        st.dataframe(table_df, use_container_width=True, hide_index=True)
 
-        csv_buf = io.StringIO()
-        results_df.to_csv(csv_buf, index=False)
-        st.download_button("Download CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
+        with st.expander("Downloads", expanded=False):
+            csv_buf = io.StringIO()
+            results_df.to_csv(csv_buf, index=False)
+            st.download_button("Download full CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
 
-        img_buf = io.BytesIO()
-        fig.savefig(img_buf, format="tiff", dpi=dpi_save)
-        img_buf.seek(0)
-        st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
+            img_buf = io.BytesIO()
+            fig.savefig(img_buf, format="tiff", dpi=dpi_save)
+            img_buf.seek(0)
+            st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
