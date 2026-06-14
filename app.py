@@ -31,38 +31,109 @@ def go_to_page(page_name: str):
     st.session_state["active_page"] = page_name
     st.rerun()
 
+def set_info_section(section_name: str):
+    st.session_state["cie_info_section"] = section_name
+    st.rerun()
+
 if st.session_state["active_page"] == "Inicio":
     st.title("CIE 1931 - Emission spectra analysis")
     st.caption("Herramienta para calcular coordenadas cromaticas CIE 1931 desde espectros de emision.")
 
-    tab_home, tab_cie, tab_spectra = st.tabs(["Inicio", "Analisis CIE 1931", "Espectros de emision"])
+    st.markdown("### Bienvenido")
+    st.write(
+        "Desde esta pagina puedes entrar al modulo de analisis para cargar tus archivos CSV/XLSX, "
+        "configurar cada compuesto y visualizar las coordenadas cromaticas."
+    )
 
-    with tab_home:
-        st.markdown("### Bienvenido")
-        st.write(
-            "Desde esta pagina puedes ir al modulo de analisis, cargar tus archivos CSV/XLSX, "
-            "configurar cada compuesto y visualizar los resultados."
-        )
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### Analisis de datos")
+        st.write("Calcula coordenadas CIE 1931, longitud dominante, pureza y grafica tus espectros.")
         if st.button("Ir al analisis CIE 1931", type="primary"):
             go_to_page("Analisis CIE 1931")
+    with c2:
+        st.markdown("#### Informacion")
+        st.write("Lee una explicacion breve sobre que es CIE 1931 y como se calculan las coordenadas.")
+        if st.button("Que son las CIE"):
+            st.session_state["cie_info_section"] = "Que son"
+            go_to_page("Sobre CIE")
 
-    with tab_cie:
-        st.markdown("### Analisis CIE 1931")
-        st.write("Carga los espectros, calcula coordenadas x,y, longitud dominante y pureza de excitacion.")
-        if st.button("Abrir modulo CIE 1931", key="open_cie_from_tab"):
-            go_to_page("Analisis CIE 1931")
+    st.stop()
 
-    with tab_spectra:
-        st.markdown("### Espectros de emision")
-        st.write("Visualiza los espectros procesados y personaliza el color de linea para cada compuesto.")
-        if st.button("Abrir espectros", key="open_spectra_from_tab"):
+if st.session_state["active_page"] == "Sobre CIE":
+    if "cie_info_section" not in st.session_state:
+        st.session_state["cie_info_section"] = "Que son"
+
+    st.title("Sobre CIE 1931")
+    main_col, nav_col = st.columns([3, 1])
+
+    with nav_col:
+        st.markdown("### Navegacion")
+        if st.button("Que son", use_container_width=True):
+            set_info_section("Que son")
+        if st.button("Como se calculan", use_container_width=True):
+            set_info_section("Como se calculan")
+        st.markdown("---")
+        if st.button("Ir al analisis", type="primary", use_container_width=True):
             go_to_page("Analisis CIE 1931")
+        if st.button("Volver al inicio", use_container_width=True):
+            go_to_page("Inicio")
+
+    with main_col:
+        if st.session_state["cie_info_section"] == "Que son":
+            st.markdown("### Que son las coordenadas CIE 1931")
+            st.write(
+                "CIE 1931 es uno de los sistemas colorimetricos mas usados para representar colores "
+                "a partir de la respuesta visual humana. Fue publicado en 1931 por la Commission "
+                "Internationale de l'Eclairage, tambien conocida como CIE."
+            )
+            st.write(
+                "El diagrama CIE 1931 usa dos coordenadas, x e y, para describir la cromaticidad "
+                "de una fuente luminosa. En este caso, la fuente es el espectro de emision que subes "
+                "a la aplicacion."
+            )
+            st.write(
+                "La ventaja de este sistema es que separa la informacion de color de la intensidad total. "
+                "Por eso dos espectros con intensidades distintas pueden tener coordenadas x,y similares "
+                "si su distribucion espectral produce una percepcion de color parecida."
+            )
+            st.markdown("### Para que sirve en espectros de emision")
+            st.write(
+                "En materiales luminiscentes, LEDs, fosforos, colorantes o complejos emisores, "
+                "las coordenadas CIE permiten comparar rapidamente el color emitido por diferentes muestras."
+            )
+        else:
+            st.markdown("### Como se calculan")
+            st.write(
+                "El calculo parte del espectro de emision: longitud de onda contra intensidad. "
+                "Ese espectro se combina con las funciones de igualacion de color del observador "
+                "estandar CIE 1931 de 2 grados."
+            )
+            st.latex(r"X = \int I(\lambda)\,\overline{x}(\lambda)\,d\lambda")
+            st.latex(r"Y = \int I(\lambda)\,\overline{y}(\lambda)\,d\lambda")
+            st.latex(r"Z = \int I(\lambda)\,\overline{z}(\lambda)\,d\lambda")
+            st.write(
+                "Aqui, I(lambda) es la intensidad del espectro de emision, y xbar, ybar, zbar "
+                "son las funciones colorimetricas CIE. En el codigo, estas integrales se calculan "
+                "numericamente con la regla trapezoidal."
+            )
+            st.write("Despues se normalizan los valores XYZ para obtener las coordenadas cromaticas:")
+            st.latex(r"x = \frac{X}{X + Y + Z}")
+            st.latex(r"y = \frac{Y}{X + Y + Z}")
+            st.write(
+                "Esas coordenadas x,y son las que se ubican sobre el diagrama CIE 1931. "
+                "La longitud dominante y la pureza se estiman trazando una linea desde el punto blanco "
+                "hasta la coordenada de la muestra y buscando su interseccion con el borde del diagrama."
+            )
 
     st.stop()
 
 st.sidebar.header("Navigation")
 if st.sidebar.button("Inicio"):
     go_to_page("Inicio")
+if st.sidebar.button("Sobre CIE"):
+    st.session_state["cie_info_section"] = "Que son"
+    go_to_page("Sobre CIE")
 
 st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
 
