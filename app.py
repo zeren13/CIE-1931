@@ -69,9 +69,11 @@ if st.session_state["active_page"] == "Sobre CIE":
 
     with nav_col:
         st.markdown("### Navegacion")
-        if st.button("Que son", use_container_width=True):
+        current_section = st.session_state["cie_info_section"]
+        st.caption(f"Seccion actual: {current_section}")
+        if st.button("Que son", type="primary" if current_section == "Que son" else "secondary", use_container_width=True):
             set_info_section("Que son")
-        if st.button("Como se calculan", use_container_width=True):
+        if st.button("Como se calculan", type="primary" if current_section == "Como se calculan" else "secondary", use_container_width=True):
             set_info_section("Como se calculan")
         st.markdown("---")
         if st.button("Ir al analisis", type="primary", use_container_width=True):
@@ -125,15 +127,193 @@ if st.session_state["active_page"] == "Sobre CIE":
                 "La longitud dominante y la pureza se estiman trazando una linea desde el punto blanco "
                 "hasta la coordenada de la muestra y buscando su interseccion con el borde del diagrama."
             )
+            st.markdown("### Ejemplo interactivo")
+            st.write(
+                "Sube un archivo con dos columnas: longitud de onda en nm e intensidad. "
+                "La aplicacion interpola el espectro, multiplica cada punto por las funciones CIE "
+                "y suma esas contribuciones para obtener X, Y y Z."
+            )
+
+            def _info_to_numeric_series(s: pd.Series):
+                return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
+
+            def _info_read_csv(raw: bytes) -> pd.DataFrame:
+                trials = [
+                    (";", ","), (";", "."),
+                    (",", ","), (",", "."),
+                    (None, ","), (None, "."),
+                ]
+                last_err = None
+                for sep, dec in trials:
+                    try:
+                        bio = io.BytesIO(raw)
+                        df_try = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
+                        if df_try.shape[1] >= 2:
+                            return df_try
+                    except Exception as e:
+                        last_err = e
+                try:
+                    bio = io.BytesIO(raw)
+                    df_try = pd.read_csv(bio, sep=r"\s+", engine="python")
+                    if df_try.shape[1] >= 2:
+                        return df_try
+                except Exception as e:
+                    last_err = e
+                raise ValueError(f"No se pudo leer el CSV. Ultimo error: {last_err}")
+
+            def _info_guess_columns(df: pd.DataFrame):
+                cols = list(df.columns)
+                wl_col = cols[0]
+                int_col = cols[1] if len(cols) > 1 else cols[0]
+                for c in cols:
+                    name = str(c).lower()
+                    if "wave" in name or "lambda" in name or "nm" in name:
+                        wl_col = c
+                        break
+                for c in cols:
+                    name = str(c).lower()
+                    if "int" in name or "counts" in name or "emission" in name or "signal" in name:
+                        int_col = c
+                        break
+                return wl_col, int_col
+
+            def _info_cmf_arrays():
+                cmfs_local = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
+                if hasattr(cmfs_local, "wavelengths"):
+                    wls_local = np.asarray(cmfs_local.wavelengths, dtype=float)
+                elif hasattr(cmfs_local, "domain"):
+                    wls_local = np.asarray(cmfs_local.domain, dtype=float)
+                else:
+                    wls_local = np.asarray(cmfs_local.index, dtype=float)
+                vals_local = np.asarray(cmfs_local.values, dtype=float)
+                if vals_local.shape[0] == 3 and vals_local.shape[1] == wls_local.shape[0]:
+                    vals_local = vals_local.T
+                return wls_local, vals_local[:, 0], vals_local[:, 1], vals_local[:, 2]
+
+            example_file = st.file_uploader(
+                "Subir datos para el ejemplo",
+                type=["csv", "xlsx"],
+                key="cie_example_file"
+            )
+
+            if example_file is not None:
+                try:
+                    raw_example = example_file.getvalue()
+                    if example_file.name.lower().endswith(".xlsx"):
+                        sheet_names = pd.ExcelFile(io.BytesIO(raw_example)).sheet_names
+                        sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
+                        df_example = pd.read_excel(io.BytesIO(raw_example), sheet_name=sheet_name)
+                    else:
+                        df_example = _info_read_csv(raw_example)
+
+                    wl_guess, int_guess = _info_guess_columns(df_example)
+                    cols = list(df_example.columns)
+                    c_a, c_b, c_c = st.columns(3)
+                    with c_a:
+                        wl_col = st.selectbox(
+                            "Columna de longitud de onda",
+                            options=cols,
+                            index=cols.index(wl_guess) if wl_guess in cols else 0,
+                            key="cie_example_wl_col"
+                        )
+                    with c_b:
+                        int_col = st.selectbox(
+                            "Columna de intensidad",
+                            options=cols,
+                            index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
+                            key="cie_example_int_col"
+                        )
+                    with c_c:
+                        interval = st.selectbox("Intervalo de interpolacion (nm)", options=[1, 2, 5, 10], index=2, key="cie_example_interval")
+
+                    c_d, c_e = st.columns(2)
+                    with c_d:
+                        wl_min = st.number_input("Longitud minima (nm)", min_value=200, max_value=10000, value=380, key="cie_example_wl_min")
+                    with c_e:
+                        wl_max = st.number_input("Longitud maxima (nm)", min_value=200, max_value=10000, value=780, key="cie_example_wl_max")
+
+                    data = pd.DataFrame({
+                        "wavelength": _info_to_numeric_series(df_example[wl_col]),
+                        "intensity": _info_to_numeric_series(df_example[int_col]),
+                    }).dropna()
+                    data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
+                    if data.empty:
+                        raise ValueError("No hay datos dentro del rango seleccionado.")
+                    data = data.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
+
+                    wl_grid = np.arange(float(wl_min), float(wl_max) + 1e-9, float(interval), dtype=float)
+                    intensity_grid = np.interp(
+                        wl_grid,
+                        data["wavelength"].values.astype(float),
+                        data["intensity"].values.astype(float),
+                        left=0.0,
+                        right=0.0,
+                    )
+
+                    cmf_wls, cmf_x, cmf_y, cmf_z = _info_cmf_arrays()
+                    xbar = np.interp(wl_grid, cmf_wls, cmf_x)
+                    ybar = np.interp(wl_grid, cmf_wls, cmf_y)
+                    zbar = np.interp(wl_grid, cmf_wls, cmf_z)
+                    x_product = intensity_grid * xbar
+                    y_product = intensity_grid * ybar
+                    z_product = intensity_grid * zbar
+                    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+                    X = float(integrate(x_product, wl_grid))
+                    Y = float(integrate(y_product, wl_grid))
+                    Z = float(integrate(z_product, wl_grid))
+                    total = X + Y + Z
+                    if not np.isfinite(total) or total <= 0:
+                        raise ValueError("La suma X+Y+Z no es valida. Revisa columnas, rango o intensidades.")
+                    x_coord = X / total
+                    y_coord = Y / total
+
+                    r1, r2, r3, r4, r5 = st.columns(5)
+                    r1.metric("X", f"{X:.4g}")
+                    r2.metric("Y", f"{Y:.4g}")
+                    r3.metric("Z", f"{Z:.4g}")
+                    r4.metric("x", f"{x_coord:.4f}")
+                    r5.metric("y", f"{y_coord:.4f}")
+
+                    fig_example, ax_example = plt.subplots(figsize=(7, 3.5))
+                    ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
+                    ax_example.set_xlabel("Wavelength (nm)")
+                    ax_example.set_ylabel("Intensity (a.u.)")
+                    ax_example.grid(alpha=0.25)
+                    ax_example.legend(loc="best")
+                    st.pyplot(fig_example)
+
+                    st.markdown("#### Tabla del calculo")
+                    calc_df = pd.DataFrame({
+                        "wavelength_nm": wl_grid,
+                        "I(lambda)": intensity_grid,
+                        "xbar(lambda)": xbar,
+                        "ybar(lambda)": ybar,
+                        "zbar(lambda)": zbar,
+                        "I*xbar": x_product,
+                        "I*ybar": y_product,
+                        "I*zbar": z_product,
+                    })
+                    st.dataframe(calc_df.head(30), use_container_width=True)
+                    st.caption(
+                        "La tabla muestra las primeras filas. Las columnas I*xbar, I*ybar e I*zbar "
+                        "son las que se integran numericamente para obtener X, Y y Z."
+                    )
+                except Exception as e:
+                    st.error(f"No se pudo calcular el ejemplo: {e}")
+            else:
+                st.info("Sube un CSV o XLSX para ver el calculo aplicado a tus propios datos.")
 
     st.stop()
 
 st.sidebar.header("Navigation")
-if st.sidebar.button("Inicio"):
+st.sidebar.caption(f"Pagina actual: {st.session_state['active_page']}")
+if st.sidebar.button("Inicio", type="primary" if st.session_state["active_page"] == "Inicio" else "secondary"):
     go_to_page("Inicio")
-if st.sidebar.button("Sobre CIE"):
+if st.sidebar.button("Sobre CIE", type="primary" if st.session_state["active_page"] == "Sobre CIE" else "secondary"):
     st.session_state["cie_info_section"] = "Que son"
     go_to_page("Sobre CIE")
+if st.sidebar.button("Analisis CIE 1931", type="primary" if st.session_state["active_page"] == "Analisis CIE 1931" else "secondary"):
+    go_to_page("Analisis CIE 1931")
 
 st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
 
