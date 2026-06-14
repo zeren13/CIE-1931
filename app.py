@@ -70,13 +70,12 @@ if st.session_state["active_page"] == "Sobre CIE":
     with nav_col:
         st.markdown("### Navegacion")
         current_section = st.session_state["cie_info_section"]
-        st.caption(f"Seccion actual: {current_section}")
         if st.button("Que son", type="primary" if current_section == "Que son" else "secondary", use_container_width=True):
             set_info_section("Que son")
         if st.button("Como se calculan", type="primary" if current_section == "Como se calculan" else "secondary", use_container_width=True):
             set_info_section("Como se calculan")
         st.markdown("---")
-        if st.button("Ir al analisis", type="primary", use_container_width=True):
+        if st.button("Ir al analisis", use_container_width=True):
             go_to_page("Analisis CIE 1931")
         if st.button("Volver al inicio", use_container_width=True):
             go_to_page("Inicio")
@@ -190,21 +189,41 @@ if st.session_state["active_page"] == "Sobre CIE":
                     vals_local = vals_local.T
                 return wls_local, vals_local[:, 0], vals_local[:, 1], vals_local[:, 2]
 
-            example_file = st.file_uploader(
-                "Subir datos para el ejemplo",
-                type=["csv", "xlsx"],
-                key="cie_example_file"
+            data_source = st.radio(
+                "Datos para el ejemplo",
+                options=["Usar ejemplo incluido", "Subir mis datos"],
+                horizontal=True,
+                key="cie_example_source",
             )
 
-            if example_file is not None:
+            example_file = None
+            if data_source == "Subir mis datos":
+                example_file = st.file_uploader(
+                    "Subir datos para el ejemplo",
+                    type=["csv", "xlsx"],
+                    key="cie_example_file"
+                )
+
+            if data_source == "Usar ejemplo incluido" or example_file is not None:
                 try:
-                    raw_example = example_file.getvalue()
-                    if example_file.name.lower().endswith(".xlsx"):
-                        sheet_names = pd.ExcelFile(io.BytesIO(raw_example)).sheet_names
-                        sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
-                        df_example = pd.read_excel(io.BytesIO(raw_example), sheet_name=sheet_name)
+                    if data_source == "Usar ejemplo incluido":
+                        sample_wl = np.arange(380, 781, 5, dtype=float)
+                        sample_intensity = (
+                            1.00 * np.exp(-0.5 * ((sample_wl - 525.0) / 32.0) ** 2)
+                            + 0.35 * np.exp(-0.5 * ((sample_wl - 610.0) / 45.0) ** 2)
+                        )
+                        df_example = pd.DataFrame({
+                            "wavelength_nm": sample_wl,
+                            "intensity": sample_intensity,
+                        })
                     else:
-                        df_example = _info_read_csv(raw_example)
+                        raw_example = example_file.getvalue()
+                        if example_file.name.lower().endswith(".xlsx"):
+                            sheet_names = pd.ExcelFile(io.BytesIO(raw_example)).sheet_names
+                            sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
+                            df_example = pd.read_excel(io.BytesIO(raw_example), sheet_name=sheet_name)
+                        else:
+                            df_example = _info_read_csv(raw_example)
 
                     wl_guess, int_guess = _info_guess_columns(df_example)
                     cols = list(df_example.columns)
@@ -267,6 +286,47 @@ if st.session_state["active_page"] == "Sobre CIE":
                     x_coord = X / total
                     y_coord = Y / total
 
+                    st.markdown("#### Paso 1. Preparar el espectro")
+                    st.write(
+                        "Primero se ordenan los datos, se eliminan valores no numericos y se interpola "
+                        "la intensidad al intervalo seleccionado. Con esto todos los calculos usan una "
+                        "malla regular de longitudes de onda."
+                    )
+                    st.latex(r"I(\lambda) \rightarrow I(380), I(385), I(390), \ldots, I(780)")
+                    st.write(
+                        f"En este ejemplo se usan {len(wl_grid)} puntos entre "
+                        f"{float(wl_min):.0f} y {float(wl_max):.0f} nm, cada {float(interval):.0f} nm."
+                    )
+
+                    st.markdown("#### Paso 2. Multiplicar por las funciones CIE")
+                    st.write(
+                        "En cada longitud de onda se multiplica la intensidad del espectro por las tres "
+                        "funciones colorimetricas del observador estandar CIE 1931."
+                    )
+                    st.latex(r"I(\lambda)\overline{x}(\lambda),\quad I(\lambda)\overline{y}(\lambda),\quad I(\lambda)\overline{z}(\lambda)")
+
+                    st.markdown("#### Paso 3. Integrar para obtener X, Y y Z")
+                    st.write(
+                        "La integracion suma el area bajo cada una de esas tres curvas. En la aplicacion "
+                        "se usa integracion trapezoidal."
+                    )
+                    st.latex(r"X = \int I(\lambda)\overline{x}(\lambda)d\lambda")
+                    st.latex(r"Y = \int I(\lambda)\overline{y}(\lambda)d\lambda")
+                    st.latex(r"Z = \int I(\lambda)\overline{z}(\lambda)d\lambda")
+                    st.write("Reemplazando con los valores calculados para este espectro:")
+                    st.latex(fr"X \approx {X:.4g}")
+                    st.latex(fr"Y \approx {Y:.4g}")
+                    st.latex(fr"Z \approx {Z:.4g}")
+
+                    st.markdown("#### Paso 4. Normalizar a coordenadas cromaticas")
+                    st.write(
+                        "Como X, Y y Z todavia dependen de la intensidad total, se dividen por "
+                        "la suma X+Y+Z para quedarse solo con la cromaticidad."
+                    )
+                    st.latex(fr"X + Y + Z = {X:.4g} + {Y:.4g} + {Z:.4g} = {total:.4g}")
+                    st.latex(fr"x = \frac{{X}}{{X+Y+Z}} = \frac{{{X:.4g}}}{{{total:.4g}}} = {x_coord:.4f}")
+                    st.latex(fr"y = \frac{{Y}}{{X+Y+Z}} = \frac{{{Y:.4g}}}{{{total:.4g}}} = {y_coord:.4f}")
+
                     r1, r2, r3, r4, r5 = st.columns(5)
                     r1.metric("X", f"{X:.4g}")
                     r2.metric("Y", f"{Y:.4g}")
@@ -274,13 +334,43 @@ if st.session_state["active_page"] == "Sobre CIE":
                     r4.metric("x", f"{x_coord:.4f}")
                     r5.metric("y", f"{y_coord:.4f}")
 
-                    fig_example, ax_example = plt.subplots(figsize=(7, 3.5))
-                    ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
-                    ax_example.set_xlabel("Wavelength (nm)")
-                    ax_example.set_ylabel("Intensity (a.u.)")
-                    ax_example.grid(alpha=0.25)
-                    ax_example.legend(loc="best")
-                    st.pyplot(fig_example)
+                    plot_col, cie_col = st.columns(2)
+                    with plot_col:
+                        st.markdown("#### Espectro de emision")
+                        fig_example, ax_example = plt.subplots(figsize=(5, 4))
+                        ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
+                        ax_example.set_xlabel("Wavelength (nm)")
+                        ax_example.set_ylabel("Intensity (a.u.)")
+                        ax_example.grid(alpha=0.25)
+                        ax_example.legend(loc="best")
+                        st.pyplot(fig_example)
+
+                    with cie_col:
+                        st.markdown("#### Punto en el diagrama CIE")
+                        fig_cie_example, ax_cie_example = plt.subplots(figsize=(5, 4))
+                        try:
+                            try:
+                                fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
+                            except TypeError:
+                                fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
+                        except Exception:
+                            locus_mask = (cmf_wls >= 380) & (cmf_wls <= 780)
+                            lx = cmf_x[locus_mask]
+                            ly = cmf_y[locus_mask]
+                            lz = cmf_z[locus_mask]
+                            den = lx + ly + lz
+                            ax_cie_example.plot(lx / den, ly / den, color="black", linewidth=1.0)
+                            ax_cie_example.set_xlim(0, 0.8)
+                            ax_cie_example.set_ylim(0, 0.9)
+                        ax_cie_example.scatter([x_coord], [y_coord], color="#d62728", s=90, zorder=5, label="Muestra")
+                        ax_cie_example.text(x_coord + 0.01, y_coord, f"x={x_coord:.3f}\ny={y_coord:.3f}", fontsize=8)
+                        ax_cie_example.set_xlabel("x")
+                        ax_cie_example.set_ylabel("y")
+                        try:
+                            ax_cie_example.legend(loc="best", fontsize=8)
+                        except Exception:
+                            pass
+                        st.pyplot(fig_cie_example)
 
                     st.markdown("#### Tabla del calculo")
                     calc_df = pd.DataFrame({
@@ -306,7 +396,6 @@ if st.session_state["active_page"] == "Sobre CIE":
     st.stop()
 
 st.sidebar.header("Navigation")
-st.sidebar.caption(f"Pagina actual: {st.session_state['active_page']}")
 if st.sidebar.button("Inicio", type="primary" if st.session_state["active_page"] == "Inicio" else "secondary"):
     go_to_page("Inicio")
 if st.sidebar.button("Sobre CIE", type="primary" if st.session_state["active_page"] == "Sobre CIE" else "secondary"):
