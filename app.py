@@ -26,14 +26,36 @@ HAS_DIALOG = callable(DIALOG_DECORATOR)
 if "active_page" not in st.session_state:
     st.session_state["active_page"] = "Inicio"
 
-# Hover suave en rojo para todos los botones de la app
+# Apariencia unificada para todos los botones de la app (nativos y de tarjetas)
 st.markdown(
     """
     <style>
-    div[data-testid="stButton"] > button:hover {
+    div[data-testid="stButton"] > button:hover,
+    a.card-btn:hover {
         background-color: #fca5a5 !important;
         border-color: #f87171 !important;
         color: #7f1d1d !important;
+    }
+    a.card-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        text-align: center;
+        padding: 0.4rem 0.9rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(49, 51, 63, 0.2);
+        background-color: #ffffff;
+        color: #31333F;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 400;
+        line-height: 1.6;
+        text-decoration: none !important;
+        transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+    }
+    a.card-btn:visited, a.card-btn:active, a.card-btn:focus {
+        text-decoration: none !important;
     }
     </style>
     """,
@@ -41,13 +63,9 @@ st.markdown(
 )
 
 
+
 def go_to_page(page_name: str):
     st.session_state["active_page"] = page_name
-    st.rerun()
-
-
-def set_info_section(section_name: str):
-    st.session_state["cie_info_section"] = section_name
     st.rerun()
 
 
@@ -462,8 +480,6 @@ if st.session_state["active_page"] != "Inicio":
         _is_active = st.session_state["active_page"] == _page_name
         if st.sidebar.button(_page_name, type="primary" if _is_active else "secondary",
                              use_container_width=True, key=f"nav_{_page_name}"):
-            if _page_name == "Aprender":
-                st.session_state["cie_info_section"] = "Que son"
             go_to_page(_page_name)
     st.sidebar.markdown("---")
 else:
@@ -488,12 +504,11 @@ if st.session_state["active_page"] == "Inicio":
             border-radius: 14px;
             padding: 1.1rem 1.2rem;
             background: #ffffff;
-            transition: box-shadow .25s ease, border-color .25s ease, transform .15s ease;
+            transition: box-shadow .2s ease, border-color .2s ease;
         }
         .module-card:hover {
             border-color: #f87171;
             box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-            transform: translateY(-2px);
         }
         .module-card h4 { margin: 0 0 .35rem 0; }
         .module-card p.card-desc {
@@ -505,40 +520,17 @@ if st.session_state["active_page"] == "Inicio":
         .card-actions {
             display: flex;
             gap: .5rem;
-            max-height: 0;
+            margin-top: .8rem;
             opacity: 0;
-            overflow: hidden;
-            margin-top: 0;
-            transition: max-height .3s ease, opacity .3s ease, margin-top .3s ease;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .2s ease;
         }
         .module-card:hover .card-actions {
-            max-height: 80px;
             opacity: 1;
-            margin-top: .8rem;
+            visibility: visible;
+            pointer-events: auto;
         }
-        .card-btn {
-            flex: 1;
-            text-align: center;
-            padding: .5rem .6rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: .82rem;
-            font-weight: 600;
-            border: 1px solid transparent;
-            transition: background-color .15s ease;
-        }
-        .card-btn-calc {
-            background-color: #fee2e2;
-            color: #7f1d1d;
-            border-color: #fca5a5;
-        }
-        .card-btn-calc:hover { background-color: #fca5a5; }
-        .card-btn-info {
-            background-color: #f1f5f9;
-            color: #334155;
-            border-color: #e2e8f0;
-        }
-        .card-btn-info:hover { background-color: #e2e8f0; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -559,8 +551,8 @@ if st.session_state["active_page"] == "Inicio":
                 <h4>{title}</h4>
                 <p class="card-desc">{desc}</p>
                 <div class="card-actions">
-                    <a class="card-btn card-btn-calc" href="?goto={calc_goto}" target="_self">{calc_label}</a>
-                    <a class="card-btn card-btn-info" href="?goto={info_goto}" target="_self">{info_label}</a>
+                    <a class="card-btn" href="?goto={calc_goto}" target="_self">{calc_label}</a>
+                    <a class="card-btn" href="?goto={info_goto}" target="_self">{info_label}</a>
                 </div>
             </div>
             """,
@@ -596,8 +588,6 @@ if st.session_state["active_page"] == "Inicio":
 # Pagina: Aprender
 # ============================================================
 if st.session_state["active_page"] == "Aprender":
-    if "cie_info_section" not in st.session_state:
-        st.session_state["cie_info_section"] = "Que son"
     if "learn_topic" not in st.session_state:
         st.session_state["learn_topic"] = "CIE 1931"
 
@@ -610,271 +600,258 @@ if st.session_state["active_page"] == "Aprender":
     st.markdown("---")
 
     if topic == "CIE 1931":
-        main_col, nav_col = st.columns([3, 1])
+        st.markdown("### Que son las coordenadas CIE 1931")
+        st.write(
+            "CIE 1931 es uno de los sistemas colorimetricos mas usados para representar colores "
+            "a partir de la respuesta visual humana. Fue publicado en 1931 por la Commission "
+            "Internationale de l'Eclairage, tambien conocida como CIE."
+        )
+        st.write(
+            "El diagrama CIE 1931 usa dos coordenadas, x e y, para describir la cromaticidad "
+            "de una fuente luminosa. En este caso, la fuente es el espectro de emision que subes "
+            "a la aplicacion."
+        )
+        st.write(
+            "La ventaja de este sistema es que separa la informacion de color de la intensidad total. "
+            "Por eso dos espectros con intensidades distintas pueden tener coordenadas x,y similares "
+            "si su distribucion espectral produce una percepcion de color parecida."
+        )
+        st.markdown("### Para que sirve en espectros de emision")
+        st.write(
+            "En materiales luminiscentes, LEDs, fosforos, colorantes o complejos emisores, "
+            "las coordenadas CIE permiten comparar rapidamente el color emitido por diferentes muestras."
+        )
+        st.markdown("### Como se calculan")
+        st.write(
+            "El calculo parte del espectro de emision: longitud de onda contra intensidad. "
+            "Ese espectro se combina con las funciones de igualacion de color del observador "
+            "estandar CIE 1931 de 2 grados."
+        )
+        st.latex(r"X = \int I(\lambda)\,\overline{x}(\lambda)\,d\lambda")
+        st.latex(r"Y = \int I(\lambda)\,\overline{y}(\lambda)\,d\lambda")
+        st.latex(r"Z = \int I(\lambda)\,\overline{z}(\lambda)\,d\lambda")
+        st.write(
+            "Aqui, I(lambda) es la intensidad del espectro de emision, y xbar, ybar, zbar "
+            "son las funciones colorimetricas CIE. En el codigo, estas integrales se calculan "
+            "numericamente con la regla trapezoidal."
+        )
+        st.write("Despues se normalizan los valores XYZ para obtener las coordenadas cromaticas:")
+        st.latex(r"x = \frac{X}{X + Y + Z}")
+        st.latex(r"y = \frac{Y}{X + Y + Z}")
+        st.write(
+            "Esas coordenadas x,y son las que se ubican sobre el diagrama CIE 1931. "
+            "La longitud dominante y la pureza se estiman trazando una linea desde el punto blanco "
+            "hasta la coordenada de la muestra y buscando su interseccion con el borde del diagrama."
+        )
+        st.markdown("### Ejemplo interactivo")
+        st.write(
+            "Sube un archivo con dos columnas: longitud de onda en nm e intensidad. "
+            "La aplicacion interpola el espectro, multiplica cada punto por las funciones CIE "
+            "y suma esas contribuciones para obtener X, Y y Z."
+        )
 
-        with nav_col:
-            st.markdown("### Secciones")
-            current_section = st.session_state["cie_info_section"]
-            if st.button("Que son", type="primary" if current_section == "Que son" else "secondary", use_container_width=True):
-                set_info_section("Que son")
-            if st.button("Como se calculan", type="primary" if current_section == "Como se calculan" else "secondary", use_container_width=True):
-                set_info_section("Como se calculan")
+        data_source = st.radio(
+            "Datos para el ejemplo",
+            options=["Usar ejemplo incluido", "Subir mis datos"],
+            horizontal=True,
+            key="cie_example_source",
+        )
 
-        with main_col:
-            if st.session_state["cie_info_section"] == "Que son":
-                st.markdown("### Que son las coordenadas CIE 1931")
-                st.write(
-                    "CIE 1931 es uno de los sistemas colorimetricos mas usados para representar colores "
-                    "a partir de la respuesta visual humana. Fue publicado en 1931 por la Commission "
-                    "Internationale de l'Eclairage, tambien conocida como CIE."
-                )
-                st.write(
-                    "El diagrama CIE 1931 usa dos coordenadas, x e y, para describir la cromaticidad "
-                    "de una fuente luminosa. En este caso, la fuente es el espectro de emision que subes "
-                    "a la aplicacion."
-                )
-                st.write(
-                    "La ventaja de este sistema es que separa la informacion de color de la intensidad total. "
-                    "Por eso dos espectros con intensidades distintas pueden tener coordenadas x,y similares "
-                    "si su distribucion espectral produce una percepcion de color parecida."
-                )
-                st.markdown("### Para que sirve en espectros de emision")
-                st.write(
-                    "En materiales luminiscentes, LEDs, fosforos, colorantes o complejos emisores, "
-                    "las coordenadas CIE permiten comparar rapidamente el color emitido por diferentes muestras."
-                )
-            else:
-                st.markdown("### Como se calculan")
-                st.write(
-                    "El calculo parte del espectro de emision: longitud de onda contra intensidad. "
-                    "Ese espectro se combina con las funciones de igualacion de color del observador "
-                    "estandar CIE 1931 de 2 grados."
-                )
-                st.latex(r"X = \int I(\lambda)\,\overline{x}(\lambda)\,d\lambda")
-                st.latex(r"Y = \int I(\lambda)\,\overline{y}(\lambda)\,d\lambda")
-                st.latex(r"Z = \int I(\lambda)\,\overline{z}(\lambda)\,d\lambda")
-                st.write(
-                    "Aqui, I(lambda) es la intensidad del espectro de emision, y xbar, ybar, zbar "
-                    "son las funciones colorimetricas CIE. En el codigo, estas integrales se calculan "
-                    "numericamente con la regla trapezoidal."
-                )
-                st.write("Despues se normalizan los valores XYZ para obtener las coordenadas cromaticas:")
-                st.latex(r"x = \frac{X}{X + Y + Z}")
-                st.latex(r"y = \frac{Y}{X + Y + Z}")
-                st.write(
-                    "Esas coordenadas x,y son las que se ubican sobre el diagrama CIE 1931. "
-                    "La longitud dominante y la pureza se estiman trazando una linea desde el punto blanco "
-                    "hasta la coordenada de la muestra y buscando su interseccion con el borde del diagrama."
-                )
-                st.markdown("### Ejemplo interactivo")
-                st.write(
-                    "Sube un archivo con dos columnas: longitud de onda en nm e intensidad. "
-                    "La aplicacion interpola el espectro, multiplica cada punto por las funciones CIE "
-                    "y suma esas contribuciones para obtener X, Y y Z."
-                )
+        example_file = None
+        if data_source == "Subir mis datos":
+            example_file = st.file_uploader(
+                "Subir datos para el ejemplo",
+                type=["csv", "xlsx"],
+                key="cie_example_file"
+            )
 
-                data_source = st.radio(
-                    "Datos para el ejemplo",
-                    options=["Usar ejemplo incluido", "Subir mis datos"],
-                    horizontal=True,
-                    key="cie_example_source",
-                )
-
-                example_file = None
-                if data_source == "Subir mis datos":
-                    example_file = st.file_uploader(
-                        "Subir datos para el ejemplo",
-                        type=["csv", "xlsx"],
-                        key="cie_example_file"
+        if data_source == "Usar ejemplo incluido" or example_file is not None:
+            try:
+                if data_source == "Usar ejemplo incluido":
+                    sample_wl = np.arange(380, 781, 5, dtype=float)
+                    sample_intensity = (
+                        1.00 * np.exp(-0.5 * ((sample_wl - 525.0) / 32.0) ** 2)
+                        + 0.35 * np.exp(-0.5 * ((sample_wl - 610.0) / 45.0) ** 2)
                     )
-
-                if data_source == "Usar ejemplo incluido" or example_file is not None:
-                    try:
-                        if data_source == "Usar ejemplo incluido":
-                            sample_wl = np.arange(380, 781, 5, dtype=float)
-                            sample_intensity = (
-                                1.00 * np.exp(-0.5 * ((sample_wl - 525.0) / 32.0) ** 2)
-                                + 0.35 * np.exp(-0.5 * ((sample_wl - 610.0) / 45.0) ** 2)
-                            )
-                            df_example = pd.DataFrame({
-                                "wavelength_nm": sample_wl,
-                                "intensity": sample_intensity,
-                            })
-                        else:
-                            raw_example = example_file.getvalue()
-                            if example_file.name.lower().endswith(".xlsx"):
-                                sheet_names = list_excel_sheets(raw_example)
-                                sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
-                                df_example = load_excel_sheet(raw_example, sheet_name)
-                            else:
-                                df_example = read_csv_flexible_bytes(raw_example)
-
-                        wl_guess, int_guess = guess_columns(df_example)
-                        cols = list(df_example.columns)
-                        c_a, c_b, c_c = st.columns(3)
-                        with c_a:
-                            wl_col = st.selectbox(
-                                "Columna de longitud de onda",
-                                options=cols,
-                                index=cols.index(wl_guess) if wl_guess in cols else 0,
-                                key="cie_example_wl_col"
-                            )
-                        with c_b:
-                            int_col = st.selectbox(
-                                "Columna de intensidad",
-                                options=cols,
-                                index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
-                                key="cie_example_int_col"
-                            )
-                        with c_c:
-                            interval = st.selectbox("Intervalo de interpolacion (nm)", options=[1, 2, 5, 10], index=2, key="cie_example_interval")
-
-                        c_d, c_e = st.columns(2)
-                        with c_d:
-                            wl_min = st.number_input("Longitud minima (nm)", min_value=200, max_value=10000, value=380, key="cie_example_wl_min")
-                        with c_e:
-                            wl_max = st.number_input("Longitud maxima (nm)", min_value=200, max_value=10000, value=780, key="cie_example_wl_max")
-
-                        data = pd.DataFrame({
-                            "wavelength": to_numeric_series(df_example[wl_col]),
-                            "intensity": to_numeric_series(df_example[int_col]),
-                        }).dropna()
-                        data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
-                        if data.empty:
-                            raise ValueError("No hay datos dentro del rango seleccionado.")
-                        data = data.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
-
-                        wl_grid = np.arange(float(wl_min), float(wl_max) + 1e-9, float(interval), dtype=float)
-                        intensity_grid = np.interp(
-                            wl_grid,
-                            data["wavelength"].values.astype(float),
-                            data["intensity"].values.astype(float),
-                            left=0.0,
-                            right=0.0,
-                        )
-
-                        xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
-                        ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
-                        zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
-                        x_product = intensity_grid * xbar
-                        y_product = intensity_grid * ybar
-                        z_product = intensity_grid * zbar
-                        integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-                        X = float(integrate(x_product, wl_grid))
-                        Y = float(integrate(y_product, wl_grid))
-                        Z = float(integrate(z_product, wl_grid))
-                        total = X + Y + Z
-                        if not np.isfinite(total) or total <= 0:
-                            raise ValueError("La suma X+Y+Z no es valida. Revisa columnas, rango o intensidades.")
-                        x_coord = X / total
-                        y_coord = Y / total
-
-                        st.markdown("#### Paso 1. Preparar el espectro")
-                        st.write(
-                            "Primero se ordenan los datos, se eliminan valores no numericos y se interpola "
-                            "la intensidad al intervalo seleccionado. Con esto todos los calculos usan una "
-                            "malla regular de longitudes de onda."
-                        )
-                        st.latex(r"I(\lambda) \rightarrow I(380), I(385), I(390), \ldots, I(780)")
-                        st.write(
-                            f"En este ejemplo se usan {len(wl_grid)} puntos entre "
-                            f"{float(wl_min):.0f} y {float(wl_max):.0f} nm, cada {float(interval):.0f} nm."
-                        )
-
-                        st.markdown("#### Paso 2. Multiplicar por las funciones CIE")
-                        st.write(
-                            "En cada longitud de onda se multiplica la intensidad del espectro por las tres "
-                            "funciones colorimetricas del observador estandar CIE 1931."
-                        )
-                        st.latex(r"I(\lambda)\overline{x}(\lambda),\quad I(\lambda)\overline{y}(\lambda),\quad I(\lambda)\overline{z}(\lambda)")
-
-                        st.markdown("#### Paso 3. Integrar para obtener X, Y y Z")
-                        st.write(
-                            "La integracion suma el area bajo cada una de esas tres curvas. En la aplicacion "
-                            "se usa integracion trapezoidal."
-                        )
-                        st.latex(r"X = \int I(\lambda)\overline{x}(\lambda)d\lambda")
-                        st.latex(r"Y = \int I(\lambda)\overline{y}(\lambda)d\lambda")
-                        st.latex(r"Z = \int I(\lambda)\overline{z}(\lambda)d\lambda")
-                        st.write("Reemplazando con los valores calculados para este espectro:")
-                        st.latex(fr"X \approx {X:.4g}")
-                        st.latex(fr"Y \approx {Y:.4g}")
-                        st.latex(fr"Z \approx {Z:.4g}")
-
-                        st.markdown("#### Paso 4. Normalizar a coordenadas cromaticas")
-                        st.write(
-                            "Como X, Y y Z todavia dependen de la intensidad total, se dividen por "
-                            "la suma X+Y+Z para quedarse solo con la cromaticidad."
-                        )
-                        st.latex(fr"X + Y + Z = {X:.4g} + {Y:.4g} + {Z:.4g} = {total:.4g}")
-                        st.latex(fr"x = \frac{{X}}{{X+Y+Z}} = \frac{{{X:.4g}}}{{{total:.4g}}} = {x_coord:.4f}")
-                        st.latex(fr"y = \frac{{Y}}{{X+Y+Z}} = \frac{{{Y:.4g}}}{{{total:.4g}}} = {y_coord:.4f}")
-
-                        r1, r2, r3, r4, r5 = st.columns(5)
-                        r1.metric("X", f"{X:.4g}")
-                        r2.metric("Y", f"{Y:.4g}")
-                        r3.metric("Z", f"{Z:.4g}")
-                        r4.metric("x", f"{x_coord:.4f}")
-                        r5.metric("y", f"{y_coord:.4f}")
-
-                        plot_col, cie_col = st.columns(2)
-                        with plot_col:
-                            st.markdown("#### Espectro de emision")
-                            fig_example, ax_example = plt.subplots(figsize=(5, 4))
-                            ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
-                            ax_example.set_xlabel("Longitud de onda (nm)")
-                            ax_example.set_ylabel("Intensidad (u.a.)")
-                            ax_example.grid(alpha=0.25)
-                            ax_example.legend(loc="best")
-                            show_and_close(fig_example)
-
-                        with cie_col:
-                            st.markdown("#### Punto en el diagrama CIE")
-                            fig_cie_example, ax_cie_example = plt.subplots(figsize=(5, 4))
-                            try:
-                                try:
-                                    fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
-                                except TypeError:
-                                    fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
-                            except Exception:
-                                locus_mask = (CMF_WLS >= 380) & (CMF_WLS <= 780)
-                                lx = CMF_X[locus_mask]
-                                ly = CMF_Y[locus_mask]
-                                lz = CMF_Z[locus_mask]
-                                den = lx + ly + lz
-                                ax_cie_example.plot(lx / den, ly / den, color="black", linewidth=1.0)
-                                ax_cie_example.set_xlim(0, 0.8)
-                                ax_cie_example.set_ylim(0, 0.9)
-                            ax_cie_example.scatter([x_coord], [y_coord], color="#d62728", s=90, zorder=5, label="Muestra")
-                            ax_cie_example.text(x_coord + 0.01, y_coord, f"x={x_coord:.3f}\ny={y_coord:.3f}", fontsize=8)
-                            ax_cie_example.set_xlabel("x")
-                            ax_cie_example.set_ylabel("y")
-                            try:
-                                ax_cie_example.legend(loc="best", fontsize=8)
-                            except Exception:
-                                pass
-                            show_and_close(fig_cie_example)
-
-                        st.markdown("#### Tabla del calculo")
-                        calc_df = pd.DataFrame({
-                            "wavelength_nm": wl_grid,
-                            "I(lambda)": intensity_grid,
-                            "xbar(lambda)": xbar,
-                            "ybar(lambda)": ybar,
-                            "zbar(lambda)": zbar,
-                            "I*xbar": x_product,
-                            "I*ybar": y_product,
-                            "I*zbar": z_product,
-                        })
-                        st.dataframe(calc_df.head(30), use_container_width=True)
-                        st.caption(
-                            "La tabla muestra las primeras filas. Las columnas I*xbar, I*ybar e I*zbar "
-                            "son las que se integran numericamente para obtener X, Y y Z."
-                        )
-                    except Exception as e:
-                        st.error(f"No se pudo calcular el ejemplo: {e}")
+                    df_example = pd.DataFrame({
+                        "wavelength_nm": sample_wl,
+                        "intensity": sample_intensity,
+                    })
                 else:
-                    st.info("Sube un CSV o XLSX para ver el calculo aplicado a tus propios datos.")
+                    raw_example = example_file.getvalue()
+                    if example_file.name.lower().endswith(".xlsx"):
+                        sheet_names = list_excel_sheets(raw_example)
+                        sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
+                        df_example = load_excel_sheet(raw_example, sheet_name)
+                    else:
+                        df_example = read_csv_flexible_bytes(raw_example)
+
+                wl_guess, int_guess = guess_columns(df_example)
+                cols = list(df_example.columns)
+                c_a, c_b, c_c = st.columns(3)
+                with c_a:
+                    wl_col = st.selectbox(
+                        "Columna de longitud de onda",
+                        options=cols,
+                        index=cols.index(wl_guess) if wl_guess in cols else 0,
+                        key="cie_example_wl_col"
+                    )
+                with c_b:
+                    int_col = st.selectbox(
+                        "Columna de intensidad",
+                        options=cols,
+                        index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
+                        key="cie_example_int_col"
+                    )
+                with c_c:
+                    interval = st.selectbox("Intervalo de interpolacion (nm)", options=[1, 2, 5, 10], index=2, key="cie_example_interval")
+
+                c_d, c_e = st.columns(2)
+                with c_d:
+                    wl_min = st.number_input("Longitud minima (nm)", min_value=200, max_value=10000, value=380, key="cie_example_wl_min")
+                with c_e:
+                    wl_max = st.number_input("Longitud maxima (nm)", min_value=200, max_value=10000, value=780, key="cie_example_wl_max")
+
+                data = pd.DataFrame({
+                    "wavelength": to_numeric_series(df_example[wl_col]),
+                    "intensity": to_numeric_series(df_example[int_col]),
+                }).dropna()
+                data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
+                if data.empty:
+                    raise ValueError("No hay datos dentro del rango seleccionado.")
+                data = data.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
+
+                wl_grid = np.arange(float(wl_min), float(wl_max) + 1e-9, float(interval), dtype=float)
+                intensity_grid = np.interp(
+                    wl_grid,
+                    data["wavelength"].values.astype(float),
+                    data["intensity"].values.astype(float),
+                    left=0.0,
+                    right=0.0,
+                )
+
+                xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
+                ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
+                zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
+                x_product = intensity_grid * xbar
+                y_product = intensity_grid * ybar
+                z_product = intensity_grid * zbar
+                integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+                X = float(integrate(x_product, wl_grid))
+                Y = float(integrate(y_product, wl_grid))
+                Z = float(integrate(z_product, wl_grid))
+                total = X + Y + Z
+                if not np.isfinite(total) or total <= 0:
+                    raise ValueError("La suma X+Y+Z no es valida. Revisa columnas, rango o intensidades.")
+                x_coord = X / total
+                y_coord = Y / total
+
+                st.markdown("#### Paso 1. Preparar el espectro")
+                st.write(
+                    "Primero se ordenan los datos, se eliminan valores no numericos y se interpola "
+                    "la intensidad al intervalo seleccionado. Con esto todos los calculos usan una "
+                    "malla regular de longitudes de onda."
+                )
+                st.latex(r"I(\lambda) \rightarrow I(380), I(385), I(390), \ldots, I(780)")
+                st.write(
+                    f"En este ejemplo se usan {len(wl_grid)} puntos entre "
+                    f"{float(wl_min):.0f} y {float(wl_max):.0f} nm, cada {float(interval):.0f} nm."
+                )
+
+                st.markdown("#### Paso 2. Multiplicar por las funciones CIE")
+                st.write(
+                    "En cada longitud de onda se multiplica la intensidad del espectro por las tres "
+                    "funciones colorimetricas del observador estandar CIE 1931."
+                )
+                st.latex(r"I(\lambda)\overline{x}(\lambda),\quad I(\lambda)\overline{y}(\lambda),\quad I(\lambda)\overline{z}(\lambda)")
+
+                st.markdown("#### Paso 3. Integrar para obtener X, Y y Z")
+                st.write(
+                    "La integracion suma el area bajo cada una de esas tres curvas. En la aplicacion "
+                    "se usa integracion trapezoidal."
+                )
+                st.latex(r"X = \int I(\lambda)\overline{x}(\lambda)d\lambda")
+                st.latex(r"Y = \int I(\lambda)\overline{y}(\lambda)d\lambda")
+                st.latex(r"Z = \int I(\lambda)\overline{z}(\lambda)d\lambda")
+                st.write("Reemplazando con los valores calculados para este espectro:")
+                st.latex(fr"X \approx {X:.4g}")
+                st.latex(fr"Y \approx {Y:.4g}")
+                st.latex(fr"Z \approx {Z:.4g}")
+
+                st.markdown("#### Paso 4. Normalizar a coordenadas cromaticas")
+                st.write(
+                    "Como X, Y y Z todavia dependen de la intensidad total, se dividen por "
+                    "la suma X+Y+Z para quedarse solo con la cromaticidad."
+                )
+                st.latex(fr"X + Y + Z = {X:.4g} + {Y:.4g} + {Z:.4g} = {total:.4g}")
+                st.latex(fr"x = \frac{{X}}{{X+Y+Z}} = \frac{{{X:.4g}}}{{{total:.4g}}} = {x_coord:.4f}")
+                st.latex(fr"y = \frac{{Y}}{{X+Y+Z}} = \frac{{{Y:.4g}}}{{{total:.4g}}} = {y_coord:.4f}")
+
+                r1, r2, r3, r4, r5 = st.columns(5)
+                r1.metric("X", f"{X:.4g}")
+                r2.metric("Y", f"{Y:.4g}")
+                r3.metric("Z", f"{Z:.4g}")
+                r4.metric("x", f"{x_coord:.4f}")
+                r5.metric("y", f"{y_coord:.4f}")
+
+                plot_col, cie_col = st.columns(2)
+                with plot_col:
+                    st.markdown("#### Espectro de emision")
+                    fig_example, ax_example = plt.subplots(figsize=(5, 4))
+                    ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
+                    ax_example.set_xlabel("Longitud de onda (nm)")
+                    ax_example.set_ylabel("Intensidad (u.a.)")
+                    ax_example.grid(alpha=0.25)
+                    ax_example.legend(loc="best")
+                    show_and_close(fig_example)
+
+                with cie_col:
+                    st.markdown("#### Punto en el diagrama CIE")
+                    fig_cie_example, ax_cie_example = plt.subplots(figsize=(5, 4))
+                    try:
+                        try:
+                            fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
+                        except TypeError:
+                            fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
+                    except Exception:
+                        locus_mask = (CMF_WLS >= 380) & (CMF_WLS <= 780)
+                        lx = CMF_X[locus_mask]
+                        ly = CMF_Y[locus_mask]
+                        lz = CMF_Z[locus_mask]
+                        den = lx + ly + lz
+                        ax_cie_example.plot(lx / den, ly / den, color="black", linewidth=1.0)
+                        ax_cie_example.set_xlim(0, 0.8)
+                        ax_cie_example.set_ylim(0, 0.9)
+                    ax_cie_example.scatter([x_coord], [y_coord], color="#d62728", s=90, zorder=5, label="Muestra")
+                    ax_cie_example.text(x_coord + 0.01, y_coord, f"x={x_coord:.3f}\ny={y_coord:.3f}", fontsize=8)
+                    ax_cie_example.set_xlabel("x")
+                    ax_cie_example.set_ylabel("y")
+                    try:
+                        ax_cie_example.legend(loc="best", fontsize=8)
+                    except Exception:
+                        pass
+                    show_and_close(fig_cie_example)
+
+                st.markdown("#### Tabla del calculo")
+                calc_df = pd.DataFrame({
+                    "wavelength_nm": wl_grid,
+                    "I(lambda)": intensity_grid,
+                    "xbar(lambda)": xbar,
+                    "ybar(lambda)": ybar,
+                    "zbar(lambda)": zbar,
+                    "I*xbar": x_product,
+                    "I*ybar": y_product,
+                    "I*zbar": z_product,
+                })
+                st.dataframe(calc_df.head(30), use_container_width=True)
+                st.caption(
+                    "La tabla muestra las primeras filas. Las columnas I*xbar, I*ybar e I*zbar "
+                    "son las que se integran numericamente para obtener X, Y y Z."
+                )
+            except Exception as e:
+                st.error(f"No se pudo calcular el ejemplo: {e}")
+        else:
+            st.info("Sube un CSV o XLSX para ver el calculo aplicado a tus propios datos.")
 
     elif topic == "Visor de espectros":
         st.markdown("### Tipos de espectro")
