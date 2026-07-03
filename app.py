@@ -418,7 +418,7 @@ def show_and_close(fig):
 
 
 # ============================================================
-# Navegacion global (sidebar) - visible en todas las paginas excepto Inicio
+# Navegacion global (sidebar) - vacia en Inicio, con enlaces en el resto
 # ============================================================
 PAGES = ["Inicio", "Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico", "Sobre CIE"]
 if st.session_state["active_page"] != "Inicio":
@@ -431,11 +431,29 @@ if st.session_state["active_page"] != "Inicio":
                 st.session_state["cie_info_section"] = "Que son"
             go_to_page(_page_name)
     st.sidebar.markdown("---")
+else:
+    st.sidebar.empty()
 
 # ============================================================
 # Pagina: Inicio
 # ============================================================
 if st.session_state["active_page"] == "Inicio":
+    st.markdown(
+        """
+        <style>
+        .main .block-container {
+            padding-top: 2rem;
+            padding-bottom: 1rem;
+        }
+        div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlockBorderWrapper"] {
+            gap: 0.25rem;
+        }
+        .main .block-container h1 { margin-bottom: 0rem; }
+        .main .block-container h3, .main .block-container h4 { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("SpectraLab Toolkit")
     st.caption("Conjunto de herramientas para visualizar, comparar y analizar datos espectroscopicos.")
 
