@@ -93,6 +93,61 @@ def _spectrum_metrics(wl, intensity):
         fwhm = float(wl[int(above[-1])] - wl[int(above[0])])
     return peak_wl, peak_intensity, area, fwhm
 
+def _process_spectrum_arrays(wl, intensity, wl_min, wl_max, interval,
+                             baseline_mode="None", clip_negative=False,
+                             smooth_method="None", smooth_window=11,
+                             normalize="None"):
+    data = pd.DataFrame({
+        "wavelength": np.asarray(wl, dtype=float),
+        "intensity": np.asarray(intensity, dtype=float),
+    }).dropna()
+    data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
+    if data.empty:
+        raise ValueError("No hay datos dentro del rango seleccionado.")
+    data = data.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
+
+    if baseline_mode == "Subtract minimum":
+        data["intensity"] = data["intensity"] - float(data["intensity"].min())
+
+    if clip_negative:
+        data["intensity"] = data["intensity"].clip(lower=0)
+
+    wl_grid = np.arange(float(wl_min), float(wl_max) + 1e-9, float(interval), dtype=float)
+    intensity_grid = np.interp(
+        wl_grid,
+        data["wavelength"].to_numpy(dtype=float),
+        data["intensity"].to_numpy(dtype=float),
+        left=0.0,
+        right=0.0,
+    )
+
+    if smooth_method == "Moving average":
+        w = int(max(3, smooth_window))
+        if w % 2 == 0:
+            w += 1
+        kernel = np.ones(w, dtype=float) / w
+        intensity_grid = np.convolve(intensity_grid, kernel, mode="same")
+    elif smooth_method == "Savitzky-Golay" and _HAS_SCIPY:
+        n = len(intensity_grid)
+        w = int(max(5, smooth_window))
+        w = min(w, n if n % 2 == 1 else n - 1)
+        if w % 2 == 0:
+            w -= 1
+        if w >= 5:
+            intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=min(3, w - 1), mode="interp")
+
+    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+    if normalize == "Max = 1":
+        max_val = float(np.nanmax(np.abs(intensity_grid)))
+        if max_val > 0:
+            intensity_grid = intensity_grid / max_val
+    elif normalize == "Area = 1":
+        area_abs = float(integrate(np.abs(intensity_grid), wl_grid))
+        if area_abs > 0:
+            intensity_grid = intensity_grid / area_abs
+
+    return wl_grid, intensity_grid
+
 if st.session_state["active_page"] == "Inicio":
     st.title("SpectraLab Toolkit")
     st.caption("Conjunto de herramientas para visualizar, comparar y analizar datos espectroscopicos.")
@@ -130,11 +185,13 @@ if st.session_state["active_page"] == "Inicio":
     with c5:
         st.markdown("#### Procesamiento")
         st.write("Normalizacion, recorte, suavizado, correccion de linea base y conversiones.")
-        st.button("Proximamente", disabled=True)
+        if st.button("Abrir procesamiento"):
+            go_to_page("Procesamiento")
     with c6:
         st.markdown("#### Reportes")
         st.write("Exportacion de figuras, tablas resumen y reportes para resultados finales.")
-        st.button("Proximamente ", disabled=True)
+        if st.button("Abrir reportes"):
+            go_to_page("Reportes")
 
     st.markdown("### Flujo de trabajo")
     f1, f2, f3 = st.columns(3)
@@ -488,6 +545,10 @@ if st.sidebar.button("Visor de espectros", type="primary" if st.session_state["a
     go_to_page("Visor de espectros")
 if st.sidebar.button("Rendimiento cuantico", type="primary" if st.session_state["active_page"] == "Rendimiento cuantico" else "secondary"):
     go_to_page("Rendimiento cuantico")
+if st.sidebar.button("Procesamiento", type="primary" if st.session_state["active_page"] == "Procesamiento" else "secondary"):
+    go_to_page("Procesamiento")
+if st.sidebar.button("Reportes", type="primary" if st.session_state["active_page"] == "Reportes" else "secondary"):
+    go_to_page("Reportes")
 if st.sidebar.button("Sobre CIE", type="primary" if st.session_state["active_page"] == "Sobre CIE" else "secondary"):
     st.session_state["cie_info_section"] = "Que son"
     go_to_page("Sobre CIE")
@@ -596,6 +657,7 @@ if st.session_state["active_page"] == "Visor de espectros":
         with right:
             st.markdown("### Summary")
             viewer_df = pd.DataFrame(viewer_rows)
+            st.session_state["viewer_results"] = viewer_df
             st.dataframe(viewer_df, use_container_width=True, hide_index=True)
             csv_viewer = io.StringIO()
             viewer_df.to_csv(csv_viewer, index=False)
@@ -628,6 +690,18 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f")
 
     phi = ref_phi * (sample_area / ref_area) * (ref_abs / sample_abs) * ((sample_n ** 2) / (ref_n ** 2))
+    qy_df = pd.DataFrame([{
+        "Phi_sample": phi,
+        "Phi_sample_%": phi * 100.0,
+        "Phi_reference": ref_phi,
+        "Sample_area": sample_area,
+        "Reference_area": ref_area,
+        "Sample_absorbance": sample_abs,
+        "Reference_absorbance": ref_abs,
+        "Sample_refractive_index": sample_n,
+        "Reference_refractive_index": ref_n,
+    }])
+    st.session_state["quantum_yield_results"] = qy_df
     st.metric("Rendimiento cuantico de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
     st.latex(
         fr"\Phi_x = {ref_phi:.4g}\left(\frac{{{sample_area:.4g}}}{{{ref_area:.4g}}}\right)"
@@ -636,6 +710,201 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     )
     if phi > 1:
         st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
+    st.stop()
+
+if st.session_state["active_page"] == "Procesamiento":
+    st.title("Procesamiento de espectros")
+    st.caption("Recorta, interpola, suaviza, corrige linea base, normaliza y exporta espectros procesados.")
+
+    processing_files = st.file_uploader(
+        "Sube archivos CSV o XLSX",
+        type=["csv", "xlsx"],
+        accept_multiple_files=True,
+        key="processing_files",
+    )
+
+    processed_rows = []
+    processed_spectra = []
+    if processing_files:
+        for i, f in enumerate(processing_files):
+            raw = f.getvalue()
+            try:
+                if f.name.lower().endswith(".xlsx"):
+                    sheet_names = pd.ExcelFile(io.BytesIO(raw)).sheet_names
+                    sheet_name = st.selectbox(f"Hoja para {f.name}", options=sheet_names, key=f"proc_sheet_{i}")
+                    df_proc = pd.read_excel(io.BytesIO(raw), sheet_name=sheet_name)
+                    base_name = f"{f.name} - {sheet_name}"
+                else:
+                    df_proc = _quick_read_csv(raw)
+                    base_name = f.name
+
+                wl_guess, int_guess = _quick_guess_columns(df_proc)
+                cols = list(df_proc.columns)
+                with st.expander(f"Procesar {base_name}", expanded=i == 0):
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        label = st.text_input("Etiqueta", value=base_name, key=f"proc_label_{i}")
+                        wl_col = st.selectbox("Columna wavelength", options=cols, index=cols.index(wl_guess) if wl_guess in cols else 0, key=f"proc_wl_{i}")
+                    with c2:
+                        int_col = st.selectbox("Columna intensidad", options=cols, index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1), key=f"proc_int_{i}")
+                        line_color = st.color_picker("Color", value=["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e"][i % 5], key=f"proc_color_{i}")
+                    with c3:
+                        interval = st.selectbox("Intervalo (nm)", options=[1, 2, 5, 10], index=2, key=f"proc_interval_{i}")
+                        normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"], key=f"proc_norm_{i}")
+
+                    c4, c5, c6 = st.columns(3)
+                    with c4:
+                        wl_min_p = st.number_input("Min nm", min_value=100, max_value=10000, value=200, key=f"proc_min_{i}")
+                    with c5:
+                        wl_max_p = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"proc_max_{i}")
+                    with c6:
+                        baseline_mode = st.selectbox("Linea base", options=["None", "Subtract minimum"], key=f"proc_base_{i}")
+
+                    c7, c8, c9 = st.columns(3)
+                    with c7:
+                        clip_negative = st.checkbox("Clip negative to 0", value=False, key=f"proc_clip_{i}")
+                    with c8:
+                        smooth_options = ["None", "Moving average"] + (["Savitzky-Golay"] if _HAS_SCIPY else [])
+                        smooth_method = st.selectbox("Suavizado", options=smooth_options, key=f"proc_smooth_{i}")
+                    with c9:
+                        smooth_window = st.slider("Ventana", min_value=3, max_value=101, value=11, step=2, key=f"proc_win_{i}")
+
+                wl_raw = _quick_to_numeric_series(df_proc[wl_col])
+                it_raw = _quick_to_numeric_series(df_proc[int_col])
+                wl_grid, intensity_grid = _process_spectrum_arrays(
+                    wl_raw,
+                    it_raw,
+                    wl_min_p,
+                    wl_max_p,
+                    interval,
+                    baseline_mode=baseline_mode,
+                    clip_negative=clip_negative,
+                    smooth_method=smooth_method,
+                    smooth_window=smooth_window,
+                    normalize=normalize,
+                )
+                peak_wl, peak_intensity, area, fwhm = _spectrum_metrics(wl_grid, intensity_grid)
+                processed_df = pd.DataFrame({
+                    "wavelength_nm": wl_grid,
+                    "intensity_processed": intensity_grid,
+                    "label": label,
+                })
+                processed_spectra.append({
+                    "label": label,
+                    "wl": wl_grid,
+                    "intensity": intensity_grid,
+                    "color": line_color,
+                    "df": processed_df,
+                })
+                processed_rows.append({
+                    "Label": label,
+                    "Peak_nm": peak_wl,
+                    "Peak_intensity": peak_intensity,
+                    "Area": area,
+                    "FWHM_nm": fwhm,
+                    "wl_min_nm": wl_min_p,
+                    "wl_max_nm": wl_max_p,
+                    "interval_nm": interval,
+                    "baseline": baseline_mode,
+                    "clip_negative": clip_negative,
+                    "smoothing": smooth_method,
+                    "normalization": normalize,
+                })
+            except Exception as e:
+                st.error(f"{f.name}: {e}")
+
+    if processed_spectra:
+        st.session_state["processed_spectra"] = processed_spectra
+        processed_summary = pd.DataFrame(processed_rows)
+        st.session_state["processing_results"] = processed_summary
+
+        left, right = st.columns([2, 1], gap="large")
+        with left:
+            fig_p, ax_p = plt.subplots(figsize=(8, 4.8))
+            for s in processed_spectra:
+                ax_p.plot(s["wl"], s["intensity"], label=s["label"], color=s["color"], linewidth=1.8)
+            ax_p.set_xlabel("Wavelength (nm)")
+            ax_p.set_ylabel("Processed intensity")
+            ax_p.grid(alpha=0.25)
+            try:
+                ax_p.legend(fontsize=8, loc="best")
+            except Exception:
+                pass
+            st.pyplot(fig_p)
+        with right:
+            st.markdown("### Summary")
+            st.dataframe(processed_summary, use_container_width=True, hide_index=True)
+
+        csv_summary = io.StringIO()
+        processed_summary.to_csv(csv_summary, index=False)
+        st.download_button("Download processing summary CSV", data=csv_summary.getvalue(), file_name="processing_summary.csv", mime="text/csv")
+
+        combined_processed = pd.concat([s["df"] for s in processed_spectra], ignore_index=True)
+        csv_processed = io.StringIO()
+        combined_processed.to_csv(csv_processed, index=False)
+        st.download_button("Download processed spectra CSV", data=csv_processed.getvalue(), file_name="processed_spectra.csv", mime="text/csv")
+    else:
+        st.info("Sube uno o mas espectros para procesarlos.")
+    st.stop()
+
+if st.session_state["active_page"] == "Reportes":
+    st.title("Reportes")
+    st.caption("Reune resultados de la sesion y exporta un libro de Excel con hojas separadas.")
+
+    report_sources = {
+        "CIE 1931": st.session_state.get("cie_results"),
+        "Visor de espectros": st.session_state.get("viewer_results"),
+        "Rendimiento cuantico": st.session_state.get("quantum_yield_results"),
+        "Procesamiento": st.session_state.get("processing_results"),
+    }
+    available = {name: df for name, df in report_sources.items() if isinstance(df, pd.DataFrame) and not df.empty}
+
+    if available:
+        st.markdown("### Resultados disponibles")
+        selected_sections = []
+        for name, df in available.items():
+            include = st.checkbox(f"Incluir {name}", value=True, key=f"report_include_{name}")
+            st.write(f"{name}: {len(df)} filas, {len(df.columns)} columnas")
+            if include:
+                selected_sections.append(name)
+
+        for name in selected_sections:
+            with st.expander(name, expanded=False):
+                st.dataframe(available[name], use_container_width=True, hide_index=True)
+
+        if selected_sections:
+            excel_buf = io.BytesIO()
+            with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+                for name in selected_sections:
+                    sheet_name = name.replace(" ", "_")[:31]
+                    available[name].to_excel(writer, sheet_name=sheet_name, index=False)
+                if st.session_state.get("processed_spectra"):
+                    combined_processed = pd.concat([s["df"] for s in st.session_state["processed_spectra"]], ignore_index=True)
+                    combined_processed.to_excel(writer, sheet_name="processed_spectra"[:31], index=False)
+            excel_buf.seek(0)
+            st.download_button(
+                "Download Excel report",
+                data=excel_buf.getvalue(),
+                file_name="SpectraLab_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+    else:
+        st.info("Aun no hay resultados guardados en la sesion. Ejecuta CIE, Visor, Rendimiento cuantico o Procesamiento primero.")
+
+    st.markdown("### Importar tabla externa")
+    external_report = st.file_uploader("Opcional: sube un CSV/XLSX para revisarlo aqui", type=["csv", "xlsx"], key="report_external")
+    if external_report is not None:
+        try:
+            raw = external_report.getvalue()
+            if external_report.name.lower().endswith(".xlsx"):
+                sheet_names = pd.ExcelFile(io.BytesIO(raw)).sheet_names
+                sheet = st.selectbox("Hoja", options=sheet_names, key="report_external_sheet")
+                ext_df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
+            else:
+                ext_df = _quick_read_csv(raw)
+            st.dataframe(ext_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"No se pudo leer la tabla externa: {e}")
     st.stop()
 
 st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
@@ -1378,6 +1647,7 @@ if results:
 
     st.markdown("### Analysis overview")
     results_df = pd.DataFrame(results)
+    st.session_state["cie_results"] = results_df
     minimal_cols = [
         "Label",
         "x",
