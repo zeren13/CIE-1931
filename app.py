@@ -26,6 +26,20 @@ HAS_DIALOG = callable(DIALOG_DECORATOR)
 if "active_page" not in st.session_state:
     st.session_state["active_page"] = "Inicio"
 
+# Hover suave en rojo para todos los botones de la app
+st.markdown(
+    """
+    <style>
+    div[data-testid="stButton"] > button:hover {
+        background-color: #fca5a5 !important;
+        border-color: #f87171 !important;
+        color: #7f1d1d !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def go_to_page(page_name: str):
     st.session_state["active_page"] = page_name
@@ -404,18 +418,19 @@ def show_and_close(fig):
 
 
 # ============================================================
-# Navegacion global (sidebar) - visible y consistente en TODAS las paginas
+# Navegacion global (sidebar) - visible en todas las paginas excepto Inicio
 # ============================================================
 PAGES = ["Inicio", "Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico", "Sobre CIE"]
-st.sidebar.header("Navegacion")
-for _page_name in PAGES:
-    _is_active = st.session_state["active_page"] == _page_name
-    if st.sidebar.button(_page_name, type="primary" if _is_active else "secondary",
-                         use_container_width=True, key=f"nav_{_page_name}"):
-        if _page_name == "Sobre CIE":
-            st.session_state["cie_info_section"] = "Que son"
-        go_to_page(_page_name)
-st.sidebar.markdown("---")
+if st.session_state["active_page"] != "Inicio":
+    st.sidebar.header("Navegacion")
+    for _page_name in PAGES:
+        _is_active = st.session_state["active_page"] == _page_name
+        if st.sidebar.button(_page_name, type="primary" if _is_active else "secondary",
+                             use_container_width=True, key=f"nav_{_page_name}"):
+            if _page_name == "Sobre CIE":
+                st.session_state["cie_info_section"] = "Que son"
+            go_to_page(_page_name)
+    st.sidebar.markdown("---")
 
 # ============================================================
 # Pagina: Inicio
@@ -434,7 +449,7 @@ if st.session_state["active_page"] == "Inicio":
     with c1:
         st.markdown("#### CIE 1931")
         st.write("Calcula coordenadas cromaticas, longitud dominante, pureza y grafica el diagrama CIE.")
-        if st.button("Ir al analisis CIE 1931", type="primary"):
+        if st.button("Ir al analisis CIE 1931"):
             go_to_page("Analisis CIE 1931")
     with c2:
         st.markdown("#### Visor de espectros")
@@ -452,12 +467,6 @@ if st.session_state["active_page"] == "Inicio":
         if st.button("Aprender sobre CIE 1931"):
             st.session_state["cie_info_section"] = "Que son"
             go_to_page("Sobre CIE")
-
-    st.markdown("### Flujo de trabajo")
-    f1, f2, f3 = st.columns(3)
-    f1.info("1. Sube archivos CSV/XLSX con longitud de onda e intensidad.")
-    f2.info("2. Configura columnas, tipo de espectro, rango y normalizacion.")
-    f3.info("3. Visualiza graficas, calcula parametros y descarga resultados.")
 
     st.stop()
 
