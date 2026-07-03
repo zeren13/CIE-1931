@@ -1,4 +1,3 @@
-
 # app.py
 import io
 import numpy as np
@@ -11,7 +10,7 @@ from matplotlib.font_manager import FontProperties
 import colour
 from colour import MSDS_CMFS
 
-# Optional: Savitzky-Golay if SciPy is installed
+# Opcional: Savitzky-Golay si SciPy esta instalado
 try:
     from scipy.signal import savgol_filter  # type: ignore
     _HAS_SCIPY = True
@@ -27,18 +26,39 @@ HAS_DIALOG = callable(DIALOG_DECORATOR)
 if "active_page" not in st.session_state:
     st.session_state["active_page"] = "Inicio"
 
+
 def go_to_page(page_name: str):
     st.session_state["active_page"] = page_name
     st.rerun()
+
 
 def set_info_section(section_name: str):
     st.session_state["cie_info_section"] = section_name
     st.rerun()
 
-def _quick_to_numeric_series(s: pd.Series):
-    return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
 
-def _quick_read_csv(raw: bytes) -> pd.DataFrame:
+# ============================================================
+# Utilidades compartidas
+# (unica implementacion, usada por todas las paginas: antes existian
+# 2-3 copias casi identicas de cada una de estas funciones)
+# ============================================================
+
+def uploaded_to_bytes(uploaded):
+    if uploaded is None:
+        return b""
+    try:
+        return uploaded.getvalue()
+    except Exception:
+        try:
+            uploaded.seek(0)
+        except Exception:
+            pass
+        return uploaded.read()
+
+
+def read_csv_flexible_bytes(raw: bytes) -> pd.DataFrame:
+    if not raw:
+        raise ValueError("El archivo esta vacio o no se pudo leer.")
     trials = [
         (";", ","), (";", "."),
         (",", ","), (",", "."),
@@ -48,37 +68,89 @@ def _quick_read_csv(raw: bytes) -> pd.DataFrame:
     for sep, dec in trials:
         try:
             bio = io.BytesIO(raw)
-            df_try = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
-            if df_try.shape[1] >= 2:
-                return df_try
+            df = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
+            if df.shape[1] >= 2:
+                return df
         except Exception as e:
             last_err = e
     try:
         bio = io.BytesIO(raw)
-        df_try = pd.read_csv(bio, sep=r"\s+", engine="python")
-        if df_try.shape[1] >= 2:
-            return df_try
+        df = pd.read_csv(bio, sep=r"\s+", engine="python")
+        if df.shape[1] >= 2:
+            return df
     except Exception as e:
         last_err = e
-    raise ValueError(f"No se pudo leer el CSV. Ultimo error: {last_err}")
+    raise ValueError(f"No se pudo leer el CSV (separador/decimal). Ultimo error: {last_err}")
 
-def _quick_guess_columns(df: pd.DataFrame):
+
+@st.cache_data(show_spinner=False)
+def load_csv_df(raw: bytes) -> pd.DataFrame:
+    return read_csv_flexible_bytes(raw)
+
+
+@st.cache_data(show_spinner=False)
+def list_excel_sheets(raw: bytes):
+    return pd.ExcelFile(io.BytesIO(raw)).sheet_names
+
+
+@st.cache_data(show_spinner=False)
+def load_excel_sheet(raw: bytes, sheet: str) -> pd.DataFrame:
+    return pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
+
+
+def to_numeric_series(s: pd.Series):
+    return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
+
+
+_WL_HINTS = ["wavelength", "wavelength (nm)", "lambda", "wl", "nm", "wave"]
+_INT_HINTS = [
+    "intensity", "intensity (a.u.)", "a.u.", "au", "counts", "cps", "signal",
+    "emission", "fluorescence", "fluorescencia", "abs", "excitation",
+]
+
+
+def _norm_colname(c):
+    return str(c).strip().lower().replace("\ufeff", "").replace("\u00b5", "u")
+
+
+def guess_columns(df: pd.DataFrame):
+    """Adivina columna de longitud de onda e intensidad por nombre, con
+    fallback a la fraccion de valores numericos si el nombre no ayuda."""
     cols = list(df.columns)
-    wl_col = cols[0] if cols else None
-    int_col = cols[1] if len(cols) > 1 else wl_col
-    for c in cols:
-        name = str(c).strip().lower()
-        if "wave" in name or "lambda" in name or "nm" in name or "wl" in name:
-            wl_col = c
-            break
-    for c in cols:
-        name = str(c).strip().lower()
-        if "int" in name or "abs" in name or "counts" in name or "emission" in name or "excitation" in name or "signal" in name:
-            int_col = c
-            break
-    return wl_col, int_col
+    if not cols:
+        return None, None
+    if len(cols) < 2:
+        return cols[0], cols[0]
 
-def _spectrum_metrics(wl, intensity):
+    norm = [_norm_colname(c) for c in cols]
+    wl_idx, int_idx = None, None
+    for i, n in enumerate(norm):
+        if any(h in n for h in _WL_HINTS):
+            wl_idx = i
+            break
+    for i, n in enumerate(norm):
+        if any(h in n for h in _INT_HINTS):
+            int_idx = i
+            break
+
+    if wl_idx is None or int_idx is None or wl_idx == int_idx:
+        numeric_scores = []
+        for i, c in enumerate(cols):
+            s = to_numeric_series(df[c])
+            numeric_scores.append((i, float(s.notna().mean())))
+        numeric_scores.sort(key=lambda x: x[1], reverse=True)
+        if wl_idx is None and numeric_scores:
+            wl_idx = numeric_scores[0][0]
+        if int_idx is None and len(numeric_scores) > 1:
+            int_idx = numeric_scores[1][0]
+        if wl_idx == int_idx and len(numeric_scores) > 1:
+            int_idx = numeric_scores[1][0]
+
+    return (cols[wl_idx] if wl_idx is not None else cols[0],
+            cols[int_idx] if int_idx is not None else cols[-1])
+
+
+def spectrum_metrics(wl, intensity):
     wl = np.asarray(wl, dtype=float)
     intensity = np.asarray(intensity, dtype=float)
     integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
@@ -93,32 +165,190 @@ def _spectrum_metrics(wl, intensity):
         fwhm = float(wl[int(above[-1])] - wl[int(above[0])])
     return peak_wl, peak_intensity, area, fwhm
 
-def _process_spectrum_arrays(wl, intensity, wl_min, wl_max, interval,
-                             baseline_mode="None", clip_negative=False,
-                             smooth_method="None", smooth_window=11,
-                             normalize="None"):
+
+def filter_and_normalize(wl_raw, int_raw, wl_min, wl_max, normalize="None"):
+    """Filtra por rango y normaliza sin interpolar a una malla (usado en el
+    visor, donde se quiere respetar el muestreo original del instrumento)."""
     data = pd.DataFrame({
-        "wavelength": np.asarray(wl, dtype=float),
-        "intensity": np.asarray(intensity, dtype=float),
+        "wavelength": to_numeric_series(wl_raw),
+        "intensity": to_numeric_series(int_raw),
     }).dropna()
     data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
     if data.empty:
         raise ValueError("No hay datos dentro del rango seleccionado.")
     data = data.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
+    wl = data["wavelength"].to_numpy(dtype=float)
+    intensity = data["intensity"].to_numpy(dtype=float)
 
-    if baseline_mode == "Subtract minimum":
-        data["intensity"] = data["intensity"] - float(data["intensity"].min())
+    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+    if normalize == "Max = 1":
+        max_val = float(np.nanmax(np.abs(intensity)))
+        if max_val > 0:
+            intensity = intensity / max_val
+    elif normalize == "Area = 1":
+        area_abs = float(integrate(np.abs(intensity), wl))
+        if area_abs > 0:
+            intensity = intensity / area_abs
+    return wl, intensity
+
+
+@st.cache_data(show_spinner=False)
+def cmfs_arrays():
+    cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
+    if hasattr(cmfs, "wavelengths"):
+        wls = np.asarray(cmfs.wavelengths, dtype=float)
+    elif hasattr(cmfs, "domain"):
+        wls = np.asarray(cmfs.domain, dtype=float)
+    else:
+        wls = np.asarray(cmfs.index, dtype=float)
+    vals = np.asarray(cmfs.values, dtype=float)
+    if vals.shape[0] == 3 and vals.shape[1] == wls.shape[0]:
+        vals = vals.T
+    return wls, vals[:, 0], vals[:, 1], vals[:, 2]
+
+
+CMF_WLS, CMF_X, CMF_Y, CMF_Z = cmfs_arrays()
+CMF_MIN, CMF_MAX = float(np.min(CMF_WLS)), float(np.max(CMF_WLS))
+
+
+@st.cache_data(show_spinner=False)
+def locus_arrays(wl_start=380, wl_end=780):
+    m = (CMF_WLS >= wl_start) & (CMF_WLS <= wl_end)
+    wls = CMF_WLS[m]
+    xbar, ybar, zbar = CMF_X[m], CMF_Y[m], CMF_Z[m]
+    den = xbar + ybar + zbar
+    den = np.where(den == 0, np.nan, den)
+    x = xbar / den
+    y = ybar / den
+    xy = np.column_stack([x, y])
+    ok = np.isfinite(xy).all(axis=1)
+    return wls[ok].astype(float), xy[ok]
+
+
+LOCUS_WLS_F, LOCUS_XY = locus_arrays(380, 780)
+
+
+def _cross2(a, b):
+    return a[0] * b[1] - a[1] * b[0]
+
+
+def _ray_segment_intersection(w, v, p0, p1, eps=1e-12):
+    s = p1 - p0
+    rxs = _cross2(v, s)
+    if abs(rxs) < eps:
+        return None
+    q_p = p0 - w
+    t = _cross2(q_p, s) / rxs
+    u = _cross2(q_p, v) / rxs
+    if t >= 0 and 0 <= u <= 1:
+        return t, u
+    return None
+
+
+def dominant_wavelength_and_purity(x, y, white_point=(0.3333, 0.3333)):
+    w = np.array([white_point[0], white_point[1]], dtype=float)
+    p = np.array([x, y], dtype=float)
+    v = p - w
+    if not np.isfinite(v).all() or (abs(v[0]) < 1e-15 and abs(v[1]) < 1e-15):
+        return np.nan, np.nan, "Indefinido"
+
+    best = None  # (t, kind, i, u, q)
+    for i in range(len(LOCUS_XY) - 1):
+        p0, p1 = LOCUS_XY[i], LOCUS_XY[i + 1]
+        hit = _ray_segment_intersection(w, v, p0, p1)
+        if hit is None:
+            continue
+        t, u = hit
+        if best is None or t < best[0]:
+            best = (t, "locus", i, u, w + t * v)
+
+    p0, p1 = LOCUS_XY[-1], LOCUS_XY[0]
+    hit = _ray_segment_intersection(w, v, p0, p1)
+    if hit is not None:
+        t, u = hit
+        if best is None or t < best[0]:
+            best = (t, "purple", -1, u, w + t * v)
+
+    if best is None:
+        return np.nan, np.nan, "Sin interseccion"
+
+    _, kind, i, u, q = best
+    d_wp_p = float(np.linalg.norm(p - w))
+    d_wp_q = float(np.linalg.norm(q - w))
+    purity = (d_wp_p / d_wp_q) * 100.0 if d_wp_q > 0 else np.nan
+
+    if kind == "locus":
+        wl0, wl1 = float(LOCUS_WLS_F[i]), float(LOCUS_WLS_F[i + 1])
+        wl = wl0 + u * (wl1 - wl0)
+        return wl, purity, "Dominante"
+
+    # longitud de onda complementaria (rayo opuesto)
+    v2 = -v
+    best2 = None
+    for j in range(len(LOCUS_XY) - 1):
+        p0, p1 = LOCUS_XY[j], LOCUS_XY[j + 1]
+        hit2 = _ray_segment_intersection(w, v2, p0, p1)
+        if hit2 is None:
+            continue
+        t2, u2 = hit2
+        if best2 is None or t2 < best2[0]:
+            best2 = (t2, j, u2)
+
+    if best2 is None:
+        return np.nan, purity, "Purpura (sin complementaria)"
+
+    _, j, u2 = best2
+    wl0, wl1 = float(LOCUS_WLS_F[j]), float(LOCUS_WLS_F[j + 1])
+    wl_comp = wl0 + u2 * (wl1 - wl0)
+    return wl_comp, purity, "Complementaria"
+
+
+def spectrum_to_xy(wl_grid, intensity_grid):
+    xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
+    ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
+    zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
+
+    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+    X = float(integrate(intensity_grid * xbar, wl_grid))
+    Y = float(integrate(intensity_grid * ybar, wl_grid))
+    Z = float(integrate(intensity_grid * zbar, wl_grid))
+
+    S = X + Y + Z
+    if not np.isfinite(S) or S <= 0:
+        raise ValueError("Valores XYZ invalidos (las intensidades son casi cero en el rango seleccionado).")
+    return X / S, Y / S
+
+
+def preprocess_spectrum(df, wl_col, int_col,
+                        wl_min_local, wl_max_local, interp_interval_local,
+                        clip_negative=False,
+                        baseline_subtract_min=False,
+                        smooth_method="None",
+                        smooth_window=11,
+                        smooth_poly=3,
+                        normalize_mode="None"):
+    out = pd.DataFrame()
+    out["wavelength"] = to_numeric_series(df[wl_col])
+    out["intensity"] = to_numeric_series(df[int_col])
+    out = out.dropna()
+    out = out[(out["wavelength"] >= wl_min_local) & (out["wavelength"] <= wl_max_local)].copy()
+    if out.empty:
+        raise ValueError("No hay datos dentro del rango de longitud de onda seleccionado.")
+    out = out.sort_values("wavelength")
+    out = out.groupby("wavelength", as_index=False)["intensity"].mean()
+
+    if baseline_subtract_min:
+        out["intensity"] = out["intensity"] - float(out["intensity"].min())
 
     if clip_negative:
-        data["intensity"] = data["intensity"].clip(lower=0)
+        out["intensity"] = out["intensity"].clip(lower=0)
 
-    wl_grid = np.arange(float(wl_min), float(wl_max) + 1e-9, float(interval), dtype=float)
+    wl_grid = np.arange(wl_min_local, wl_max_local + 1e-9, interp_interval_local, dtype=float)
     intensity_grid = np.interp(
         wl_grid,
-        data["wavelength"].to_numpy(dtype=float),
-        data["intensity"].to_numpy(dtype=float),
-        left=0.0,
-        right=0.0,
+        out["wavelength"].values.astype(float),
+        out["intensity"].values.astype(float),
+        left=0.0, right=0.0
     )
 
     if smooth_method == "Moving average":
@@ -128,26 +358,68 @@ def _process_spectrum_arrays(wl, intensity, wl_min, wl_max, interval,
         kernel = np.ones(w, dtype=float) / w
         intensity_grid = np.convolve(intensity_grid, kernel, mode="same")
     elif smooth_method == "Savitzky-Golay" and _HAS_SCIPY:
-        n = len(intensity_grid)
-        w = int(max(5, smooth_window))
-        w = min(w, n if n % 2 == 1 else n - 1)
+        n = int(len(intensity_grid))
+        w = min(int(max(5, smooth_window)), n if n % 2 == 1 else n - 1)
         if w % 2 == 0:
             w -= 1
-        if w >= 5:
-            intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=min(3, w - 1), mode="interp")
+        p = int(max(2, smooth_poly))
+        if w >= 3 and p >= w:
+            p = w - 1
+        if w >= 3 and p < w:
+            intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=p, mode="interp")
 
     integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-    if normalize == "Max = 1":
-        max_val = float(np.nanmax(np.abs(intensity_grid)))
-        if max_val > 0:
-            intensity_grid = intensity_grid / max_val
-    elif normalize == "Area = 1":
-        area_abs = float(integrate(np.abs(intensity_grid), wl_grid))
-        if area_abs > 0:
-            intensity_grid = intensity_grid / area_abs
+    if normalize_mode == "Max = 1":
+        m = float(np.max(np.abs(intensity_grid)))
+        if m > 0:
+            intensity_grid = intensity_grid / m
+    elif normalize_mode == "Area = 1":
+        area = float(integrate(np.abs(intensity_grid), wl_grid))
+        if area > 0:
+            intensity_grid = intensity_grid / area
+
+    if float(np.max(np.abs(intensity_grid))) <= 0:
+        raise ValueError("Intensidad cero en el rango seleccionado (revisa columnas y rango).")
 
     return wl_grid, intensity_grid
 
+
+def _safe_mpl_text(s: str) -> str:
+    """Evita fallos de Matplotlib causados por mathtext invalido.
+
+    Matplotlib intenta interpretar mathtext cuando ve '$'. Si el usuario
+    escribe un solo '$' suelto, tight_layout puede fallar.
+    """
+    s = "" if s is None else str(s)
+    if s.count("$") % 2 == 1:
+        s = s.replace("$", "")
+    return s
+
+
+def show_and_close(fig):
+    """st.pyplot + cierre explicito de la figura para evitar fugas de
+    memoria en sesiones largas con muchos reruns."""
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+# ============================================================
+# Navegacion global (sidebar) - visible y consistente en TODAS las paginas
+# ============================================================
+PAGES = ["Inicio", "Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico", "Sobre CIE"]
+st.sidebar.header("Navegacion")
+for _page_name in PAGES:
+    _is_active = st.session_state["active_page"] == _page_name
+    if st.sidebar.button(_page_name, type="primary" if _is_active else "secondary",
+                         use_container_width=True, key=f"nav_{_page_name}"):
+        if _page_name == "Sobre CIE":
+            st.session_state["cie_info_section"] = "Que son"
+        go_to_page(_page_name)
+st.sidebar.markdown("---")
+
+# ============================================================
+# Pagina: Inicio
+# ============================================================
 if st.session_state["active_page"] == "Inicio":
     st.title("SpectraLab Toolkit")
     st.caption("Conjunto de herramientas para visualizar, comparar y analizar datos espectroscopicos.")
@@ -158,7 +430,7 @@ if st.session_state["active_page"] == "Inicio":
         "pero todos comparten la misma idea de cargar datos, procesarlos y exportar resultados."
     )
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown("#### CIE 1931")
         st.write("Calcula coordenadas cromaticas, longitud dominante, pureza y grafica el diagrama CIE.")
@@ -174,24 +446,12 @@ if st.session_state["active_page"] == "Inicio":
         st.write("Calcula rendimiento cuantico relativo usando muestra, referencia, absorbancia y area.")
         if st.button("Abrir rendimiento cuantico"):
             go_to_page("Rendimiento cuantico")
-
-    c4, c5, c6 = st.columns(3)
     with c4:
         st.markdown("#### Aprender CIE")
         st.write("Consulta que es CIE 1931 y revisa un ejemplo guiado de calculo.")
         if st.button("Aprender sobre CIE 1931"):
             st.session_state["cie_info_section"] = "Que son"
             go_to_page("Sobre CIE")
-    with c5:
-        st.markdown("#### Procesamiento")
-        st.write("Normalizacion, recorte, suavizado, correccion de linea base y conversiones.")
-        if st.button("Abrir procesamiento"):
-            go_to_page("Procesamiento")
-    with c6:
-        st.markdown("#### Reportes")
-        st.write("Exportacion de figuras, tablas resumen y reportes para resultados finales.")
-        if st.button("Abrir reportes"):
-            go_to_page("Reportes")
 
     st.markdown("### Flujo de trabajo")
     f1, f2, f3 = st.columns(3)
@@ -201,6 +461,9 @@ if st.session_state["active_page"] == "Inicio":
 
     st.stop()
 
+# ============================================================
+# Pagina: Sobre CIE
+# ============================================================
 if st.session_state["active_page"] == "Sobre CIE":
     if "cie_info_section" not in st.session_state:
         st.session_state["cie_info_section"] = "Que son"
@@ -209,17 +472,12 @@ if st.session_state["active_page"] == "Sobre CIE":
     main_col, nav_col = st.columns([3, 1])
 
     with nav_col:
-        st.markdown("### Navegacion")
+        st.markdown("### Secciones")
         current_section = st.session_state["cie_info_section"]
         if st.button("Que son", type="primary" if current_section == "Que son" else "secondary", use_container_width=True):
             set_info_section("Que son")
         if st.button("Como se calculan", type="primary" if current_section == "Como se calculan" else "secondary", use_container_width=True):
             set_info_section("Como se calculan")
-        st.markdown("---")
-        if st.button("Ir al analisis", use_container_width=True):
-            go_to_page("Analisis CIE 1931")
-        if st.button("Volver al inicio", use_container_width=True):
-            go_to_page("Inicio")
 
     with main_col:
         if st.session_state["cie_info_section"] == "Que son":
@@ -274,62 +532,6 @@ if st.session_state["active_page"] == "Sobre CIE":
                 "y suma esas contribuciones para obtener X, Y y Z."
             )
 
-            def _info_to_numeric_series(s: pd.Series):
-                return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
-
-            def _info_read_csv(raw: bytes) -> pd.DataFrame:
-                trials = [
-                    (";", ","), (";", "."),
-                    (",", ","), (",", "."),
-                    (None, ","), (None, "."),
-                ]
-                last_err = None
-                for sep, dec in trials:
-                    try:
-                        bio = io.BytesIO(raw)
-                        df_try = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
-                        if df_try.shape[1] >= 2:
-                            return df_try
-                    except Exception as e:
-                        last_err = e
-                try:
-                    bio = io.BytesIO(raw)
-                    df_try = pd.read_csv(bio, sep=r"\s+", engine="python")
-                    if df_try.shape[1] >= 2:
-                        return df_try
-                except Exception as e:
-                    last_err = e
-                raise ValueError(f"No se pudo leer el CSV. Ultimo error: {last_err}")
-
-            def _info_guess_columns(df: pd.DataFrame):
-                cols = list(df.columns)
-                wl_col = cols[0]
-                int_col = cols[1] if len(cols) > 1 else cols[0]
-                for c in cols:
-                    name = str(c).lower()
-                    if "wave" in name or "lambda" in name or "nm" in name:
-                        wl_col = c
-                        break
-                for c in cols:
-                    name = str(c).lower()
-                    if "int" in name or "counts" in name or "emission" in name or "signal" in name:
-                        int_col = c
-                        break
-                return wl_col, int_col
-
-            def _info_cmf_arrays():
-                cmfs_local = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
-                if hasattr(cmfs_local, "wavelengths"):
-                    wls_local = np.asarray(cmfs_local.wavelengths, dtype=float)
-                elif hasattr(cmfs_local, "domain"):
-                    wls_local = np.asarray(cmfs_local.domain, dtype=float)
-                else:
-                    wls_local = np.asarray(cmfs_local.index, dtype=float)
-                vals_local = np.asarray(cmfs_local.values, dtype=float)
-                if vals_local.shape[0] == 3 and vals_local.shape[1] == wls_local.shape[0]:
-                    vals_local = vals_local.T
-                return wls_local, vals_local[:, 0], vals_local[:, 1], vals_local[:, 2]
-
             data_source = st.radio(
                 "Datos para el ejemplo",
                 options=["Usar ejemplo incluido", "Subir mis datos"],
@@ -360,13 +562,13 @@ if st.session_state["active_page"] == "Sobre CIE":
                     else:
                         raw_example = example_file.getvalue()
                         if example_file.name.lower().endswith(".xlsx"):
-                            sheet_names = pd.ExcelFile(io.BytesIO(raw_example)).sheet_names
+                            sheet_names = list_excel_sheets(raw_example)
                             sheet_name = st.selectbox("Hoja de Excel", options=sheet_names, key="cie_example_sheet")
-                            df_example = pd.read_excel(io.BytesIO(raw_example), sheet_name=sheet_name)
+                            df_example = load_excel_sheet(raw_example, sheet_name)
                         else:
-                            df_example = _info_read_csv(raw_example)
+                            df_example = read_csv_flexible_bytes(raw_example)
 
-                    wl_guess, int_guess = _info_guess_columns(df_example)
+                    wl_guess, int_guess = guess_columns(df_example)
                     cols = list(df_example.columns)
                     c_a, c_b, c_c = st.columns(3)
                     with c_a:
@@ -393,8 +595,8 @@ if st.session_state["active_page"] == "Sobre CIE":
                         wl_max = st.number_input("Longitud maxima (nm)", min_value=200, max_value=10000, value=780, key="cie_example_wl_max")
 
                     data = pd.DataFrame({
-                        "wavelength": _info_to_numeric_series(df_example[wl_col]),
-                        "intensity": _info_to_numeric_series(df_example[int_col]),
+                        "wavelength": to_numeric_series(df_example[wl_col]),
+                        "intensity": to_numeric_series(df_example[int_col]),
                     }).dropna()
                     data = data[(data["wavelength"] >= wl_min) & (data["wavelength"] <= wl_max)].copy()
                     if data.empty:
@@ -410,10 +612,9 @@ if st.session_state["active_page"] == "Sobre CIE":
                         right=0.0,
                     )
 
-                    cmf_wls, cmf_x, cmf_y, cmf_z = _info_cmf_arrays()
-                    xbar = np.interp(wl_grid, cmf_wls, cmf_x)
-                    ybar = np.interp(wl_grid, cmf_wls, cmf_y)
-                    zbar = np.interp(wl_grid, cmf_wls, cmf_z)
+                    xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
+                    ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
+                    zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
                     x_product = intensity_grid * xbar
                     y_product = intensity_grid * ybar
                     z_product = intensity_grid * zbar
@@ -480,11 +681,11 @@ if st.session_state["active_page"] == "Sobre CIE":
                         st.markdown("#### Espectro de emision")
                         fig_example, ax_example = plt.subplots(figsize=(5, 4))
                         ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
-                        ax_example.set_xlabel("Wavelength (nm)")
-                        ax_example.set_ylabel("Intensity (a.u.)")
+                        ax_example.set_xlabel("Longitud de onda (nm)")
+                        ax_example.set_ylabel("Intensidad (u.a.)")
                         ax_example.grid(alpha=0.25)
                         ax_example.legend(loc="best")
-                        st.pyplot(fig_example)
+                        show_and_close(fig_example)
 
                     with cie_col:
                         st.markdown("#### Punto en el diagrama CIE")
@@ -495,10 +696,10 @@ if st.session_state["active_page"] == "Sobre CIE":
                             except TypeError:
                                 fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(standalone=False)
                         except Exception:
-                            locus_mask = (cmf_wls >= 380) & (cmf_wls <= 780)
-                            lx = cmf_x[locus_mask]
-                            ly = cmf_y[locus_mask]
-                            lz = cmf_z[locus_mask]
+                            locus_mask = (CMF_WLS >= 380) & (CMF_WLS <= 780)
+                            lx = CMF_X[locus_mask]
+                            ly = CMF_Y[locus_mask]
+                            lz = CMF_Z[locus_mask]
                             den = lx + ly + lz
                             ax_cie_example.plot(lx / den, ly / den, color="black", linewidth=1.0)
                             ax_cie_example.set_xlim(0, 0.8)
@@ -511,7 +712,7 @@ if st.session_state["active_page"] == "Sobre CIE":
                             ax_cie_example.legend(loc="best", fontsize=8)
                         except Exception:
                             pass
-                        st.pyplot(fig_cie_example)
+                        show_and_close(fig_cie_example)
 
                     st.markdown("#### Tabla del calculo")
                     calc_df = pd.DataFrame({
@@ -536,23 +737,9 @@ if st.session_state["active_page"] == "Sobre CIE":
 
     st.stop()
 
-st.sidebar.header("Navigation")
-if st.sidebar.button("Inicio", type="primary" if st.session_state["active_page"] == "Inicio" else "secondary"):
-    go_to_page("Inicio")
-if st.sidebar.button("Analisis CIE 1931", type="primary" if st.session_state["active_page"] == "Analisis CIE 1931" else "secondary"):
-    go_to_page("Analisis CIE 1931")
-if st.sidebar.button("Visor de espectros", type="primary" if st.session_state["active_page"] == "Visor de espectros" else "secondary"):
-    go_to_page("Visor de espectros")
-if st.sidebar.button("Rendimiento cuantico", type="primary" if st.session_state["active_page"] == "Rendimiento cuantico" else "secondary"):
-    go_to_page("Rendimiento cuantico")
-if st.sidebar.button("Procesamiento", type="primary" if st.session_state["active_page"] == "Procesamiento" else "secondary"):
-    go_to_page("Procesamiento")
-if st.sidebar.button("Reportes", type="primary" if st.session_state["active_page"] == "Reportes" else "secondary"):
-    go_to_page("Reportes")
-if st.sidebar.button("Sobre CIE", type="primary" if st.session_state["active_page"] == "Sobre CIE" else "secondary"):
-    st.session_state["cie_info_section"] = "Que son"
-    go_to_page("Sobre CIE")
-
+# ============================================================
+# Pagina: Visor de espectros
+# ============================================================
 if st.session_state["active_page"] == "Visor de espectros":
     st.title("Visor de espectros")
     st.caption("Compara espectros de absorcion, emision o excitacion en solucion y solido.")
@@ -571,21 +758,21 @@ if st.session_state["active_page"] == "Visor de espectros":
             raw = f.getvalue()
             try:
                 if f.name.lower().endswith(".xlsx"):
-                    sheet_names = pd.ExcelFile(io.BytesIO(raw)).sheet_names
+                    sheet_names = list_excel_sheets(raw)
                     selected_sheet = st.selectbox(f"Hoja para {f.name}", options=sheet_names, key=f"viewer_sheet_{i}")
-                    df_view = pd.read_excel(io.BytesIO(raw), sheet_name=selected_sheet)
+                    df_view = load_excel_sheet(raw, selected_sheet)
                     base_name = f"{f.name} - {selected_sheet}"
                 else:
-                    df_view = _quick_read_csv(raw)
+                    df_view = load_csv_df(raw)
                     base_name = f.name
 
-                wl_guess, int_guess = _quick_guess_columns(df_view)
+                wl_guess, int_guess = guess_columns(df_view)
                 cols = list(df_view.columns)
                 with st.expander(f"Configurar {base_name}", expanded=i == 0):
                     c1, c2, c3 = st.columns(3)
                     with c1:
                         label = st.text_input("Etiqueta", value=base_name, key=f"viewer_label_{i}")
-                        wl_col = st.selectbox("Columna wavelength", options=cols, index=cols.index(wl_guess) if wl_guess in cols else 0, key=f"viewer_wl_{i}")
+                        wl_col = st.selectbox("Columna longitud de onda", options=cols, index=cols.index(wl_guess) if wl_guess in cols else 0, key=f"viewer_wl_{i}")
                     with c2:
                         int_col = st.selectbox("Columna intensidad", options=cols, index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1), key=f"viewer_int_{i}")
                         spectrum_type = st.selectbox("Tipo", options=["Absorcion", "Emision", "Excitacion"], key=f"viewer_type_{i}")
@@ -601,27 +788,8 @@ if st.session_state["active_page"] == "Visor de espectros":
                     with c6:
                         wl_max_v = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"viewer_max_{i}")
 
-                data_view = pd.DataFrame({
-                    "wavelength": _quick_to_numeric_series(df_view[wl_col]),
-                    "intensity": _quick_to_numeric_series(df_view[int_col]),
-                }).dropna()
-                data_view = data_view[(data_view["wavelength"] >= wl_min_v) & (data_view["wavelength"] <= wl_max_v)].copy()
-                if data_view.empty:
-                    raise ValueError("No hay datos dentro del rango seleccionado.")
-                data_view = data_view.sort_values("wavelength").groupby("wavelength", as_index=False)["intensity"].mean()
-                wl = data_view["wavelength"].to_numpy(dtype=float)
-                intensity = data_view["intensity"].to_numpy(dtype=float)
-                integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-                if normalize == "Max = 1":
-                    max_val = float(np.nanmax(np.abs(intensity)))
-                    if max_val > 0:
-                        intensity = intensity / max_val
-                elif normalize == "Area = 1":
-                    area_abs = float(integrate(np.abs(intensity), wl))
-                    if area_abs > 0:
-                        intensity = intensity / area_abs
-
-                peak_wl, peak_intensity, area, fwhm = _spectrum_metrics(wl, intensity)
+                wl, intensity = filter_and_normalize(df_view[wl_col], df_view[int_col], wl_min_v, wl_max_v, normalize)
+                peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
                 viewer_spectra.append({
                     "label": label,
                     "wl": wl,
@@ -629,11 +797,11 @@ if st.session_state["active_page"] == "Visor de espectros":
                     "color": line_color,
                 })
                 viewer_rows.append({
-                    "Label": label,
-                    "Type": spectrum_type,
-                    "Medium": sample_state,
-                    "Peak_nm": peak_wl,
-                    "Peak_intensity": peak_intensity,
+                    "Etiqueta": label,
+                    "Tipo": spectrum_type,
+                    "Medio": sample_state,
+                    "Pico_nm": peak_wl,
+                    "Intensidad_pico": peak_intensity,
                     "Area": area,
                     "FWHM_nm": fwhm,
                 })
@@ -646,26 +814,28 @@ if st.session_state["active_page"] == "Visor de espectros":
             fig_v, ax_v = plt.subplots(figsize=(8, 4.8))
             for s in viewer_spectra:
                 ax_v.plot(s["wl"], s["intensity"], label=s["label"], color=s["color"], linewidth=1.8)
-            ax_v.set_xlabel("Wavelength (nm)")
-            ax_v.set_ylabel("Intensity / Absorbance")
+            ax_v.set_xlabel("Longitud de onda (nm)")
+            ax_v.set_ylabel("Intensidad / Absorbancia")
             ax_v.grid(alpha=0.25)
             try:
                 ax_v.legend(fontsize=8, loc="best")
             except Exception:
                 pass
-            st.pyplot(fig_v)
+            show_and_close(fig_v)
         with right:
-            st.markdown("### Summary")
+            st.markdown("### Resumen")
             viewer_df = pd.DataFrame(viewer_rows)
-            st.session_state["viewer_results"] = viewer_df
             st.dataframe(viewer_df, use_container_width=True, hide_index=True)
             csv_viewer = io.StringIO()
             viewer_df.to_csv(csv_viewer, index=False)
-            st.download_button("Download summary CSV", data=csv_viewer.getvalue(), file_name="spectra_viewer_summary.csv", mime="text/csv")
+            st.download_button("Descargar resumen CSV", data=csv_viewer.getvalue(), file_name="spectra_viewer_summary.csv", mime="text/csv")
     else:
         st.info("Sube uno o mas espectros para iniciar la visualizacion.")
     st.stop()
 
+# ============================================================
+# Pagina: Rendimiento cuantico
+# ============================================================
 if st.session_state["active_page"] == "Rendimiento cuantico":
     st.title("Rendimiento cuantico relativo")
     st.caption("Calcula Phi de una muestra comparandola con una referencia.")
@@ -690,18 +860,6 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f")
 
     phi = ref_phi * (sample_area / ref_area) * (ref_abs / sample_abs) * ((sample_n ** 2) / (ref_n ** 2))
-    qy_df = pd.DataFrame([{
-        "Phi_sample": phi,
-        "Phi_sample_%": phi * 100.0,
-        "Phi_reference": ref_phi,
-        "Sample_area": sample_area,
-        "Reference_area": ref_area,
-        "Sample_absorbance": sample_abs,
-        "Reference_absorbance": ref_abs,
-        "Sample_refractive_index": sample_n,
-        "Reference_refractive_index": ref_n,
-    }])
-    st.session_state["quantum_yield_results"] = qy_df
     st.metric("Rendimiento cuantico de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
     st.latex(
         fr"\Phi_x = {ref_phi:.4g}\left(\frac{{{sample_area:.4g}}}{{{ref_area:.4g}}}\right)"
@@ -712,581 +870,77 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
     st.stop()
 
-if st.session_state["active_page"] == "Procesamiento":
-    st.title("Procesamiento de espectros")
-    st.caption("Recorta, interpola, suaviza, corrige linea base, normaliza y exporta espectros procesados.")
+# ============================================================
+# Pagina: Analisis CIE 1931 (principal)
+# ============================================================
+st.title("CIE 1931 - Coordenadas de cromaticidad a partir de espectros de emision")
 
-    processing_files = st.file_uploader(
-        "Sube archivos CSV o XLSX",
-        type=["csv", "xlsx"],
-        accept_multiple_files=True,
-        key="processing_files",
-    )
+# ----------------- Sidebar (parametros de esta pagina) -----------------
+st.sidebar.header("Parametros globales")
+wl_min_default = st.sidebar.number_input("Longitud de onda minima (nm)", min_value=200, max_value=10000, value=380)
+wl_max_default = st.sidebar.number_input("Longitud de onda maxima (nm)", min_value=200, max_value=10000, value=780)
+interp_interval_default = st.sidebar.selectbox("Intervalo de interpolacion (nm)", options=[1, 2, 5, 10], index=2)
+dpi_save = st.sidebar.number_input("DPI para exportar TIFF", min_value=72, max_value=1200, value=600)
 
-    processed_rows = []
-    processed_spectra = []
-    if processing_files:
-        for i, f in enumerate(processing_files):
-            raw = f.getvalue()
-            try:
-                if f.name.lower().endswith(".xlsx"):
-                    sheet_names = pd.ExcelFile(io.BytesIO(raw)).sheet_names
-                    sheet_name = st.selectbox(f"Hoja para {f.name}", options=sheet_names, key=f"proc_sheet_{i}")
-                    df_proc = pd.read_excel(io.BytesIO(raw), sheet_name=sheet_name)
-                    base_name = f"{f.name} - {sheet_name}"
-                else:
-                    df_proc = _quick_read_csv(raw)
-                    base_name = f.name
-
-                wl_guess, int_guess = _quick_guess_columns(df_proc)
-                cols = list(df_proc.columns)
-                with st.expander(f"Procesar {base_name}", expanded=i == 0):
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        label = st.text_input("Etiqueta", value=base_name, key=f"proc_label_{i}")
-                        wl_col = st.selectbox("Columna wavelength", options=cols, index=cols.index(wl_guess) if wl_guess in cols else 0, key=f"proc_wl_{i}")
-                    with c2:
-                        int_col = st.selectbox("Columna intensidad", options=cols, index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1), key=f"proc_int_{i}")
-                        line_color = st.color_picker("Color", value=["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e"][i % 5], key=f"proc_color_{i}")
-                    with c3:
-                        interval = st.selectbox("Intervalo (nm)", options=[1, 2, 5, 10], index=2, key=f"proc_interval_{i}")
-                        normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"], key=f"proc_norm_{i}")
-
-                    c4, c5, c6 = st.columns(3)
-                    with c4:
-                        wl_min_p = st.number_input("Min nm", min_value=100, max_value=10000, value=200, key=f"proc_min_{i}")
-                    with c5:
-                        wl_max_p = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"proc_max_{i}")
-                    with c6:
-                        baseline_mode = st.selectbox("Linea base", options=["None", "Subtract minimum"], key=f"proc_base_{i}")
-
-                    c7, c8, c9 = st.columns(3)
-                    with c7:
-                        clip_negative = st.checkbox("Clip negative to 0", value=False, key=f"proc_clip_{i}")
-                    with c8:
-                        smooth_options = ["None", "Moving average"] + (["Savitzky-Golay"] if _HAS_SCIPY else [])
-                        smooth_method = st.selectbox("Suavizado", options=smooth_options, key=f"proc_smooth_{i}")
-                    with c9:
-                        smooth_window = st.slider("Ventana", min_value=3, max_value=101, value=11, step=2, key=f"proc_win_{i}")
-
-                wl_raw = _quick_to_numeric_series(df_proc[wl_col])
-                it_raw = _quick_to_numeric_series(df_proc[int_col])
-                wl_grid, intensity_grid = _process_spectrum_arrays(
-                    wl_raw,
-                    it_raw,
-                    wl_min_p,
-                    wl_max_p,
-                    interval,
-                    baseline_mode=baseline_mode,
-                    clip_negative=clip_negative,
-                    smooth_method=smooth_method,
-                    smooth_window=smooth_window,
-                    normalize=normalize,
-                )
-                peak_wl, peak_intensity, area, fwhm = _spectrum_metrics(wl_grid, intensity_grid)
-                processed_df = pd.DataFrame({
-                    "wavelength_nm": wl_grid,
-                    "intensity_processed": intensity_grid,
-                    "label": label,
-                })
-                processed_spectra.append({
-                    "label": label,
-                    "wl": wl_grid,
-                    "intensity": intensity_grid,
-                    "color": line_color,
-                    "df": processed_df,
-                })
-                processed_rows.append({
-                    "Label": label,
-                    "Peak_nm": peak_wl,
-                    "Peak_intensity": peak_intensity,
-                    "Area": area,
-                    "FWHM_nm": fwhm,
-                    "wl_min_nm": wl_min_p,
-                    "wl_max_nm": wl_max_p,
-                    "interval_nm": interval,
-                    "baseline": baseline_mode,
-                    "clip_negative": clip_negative,
-                    "smoothing": smooth_method,
-                    "normalization": normalize,
-                })
-            except Exception as e:
-                st.error(f"{f.name}: {e}")
-
-    if processed_spectra:
-        st.session_state["processed_spectra"] = processed_spectra
-        processed_summary = pd.DataFrame(processed_rows)
-        st.session_state["processing_results"] = processed_summary
-
-        left, right = st.columns([2, 1], gap="large")
-        with left:
-            fig_p, ax_p = plt.subplots(figsize=(8, 4.8))
-            for s in processed_spectra:
-                ax_p.plot(s["wl"], s["intensity"], label=s["label"], color=s["color"], linewidth=1.8)
-            ax_p.set_xlabel("Wavelength (nm)")
-            ax_p.set_ylabel("Processed intensity")
-            ax_p.grid(alpha=0.25)
-            try:
-                ax_p.legend(fontsize=8, loc="best")
-            except Exception:
-                pass
-            st.pyplot(fig_p)
-        with right:
-            st.markdown("### Summary")
-            st.dataframe(processed_summary, use_container_width=True, hide_index=True)
-
-        csv_summary = io.StringIO()
-        processed_summary.to_csv(csv_summary, index=False)
-        st.download_button("Download processing summary CSV", data=csv_summary.getvalue(), file_name="processing_summary.csv", mime="text/csv")
-
-        combined_processed = pd.concat([s["df"] for s in processed_spectra], ignore_index=True)
-        csv_processed = io.StringIO()
-        combined_processed.to_csv(csv_processed, index=False)
-        st.download_button("Download processed spectra CSV", data=csv_processed.getvalue(), file_name="processed_spectra.csv", mime="text/csv")
-    else:
-        st.info("Sube uno o mas espectros para procesarlos.")
-    st.stop()
-
-if st.session_state["active_page"] == "Reportes":
-    st.title("Reportes")
-    st.caption("Reune resultados de la sesion y exporta un libro de Excel con hojas separadas.")
-
-    report_sources = {
-        "CIE 1931": st.session_state.get("cie_results"),
-        "Visor de espectros": st.session_state.get("viewer_results"),
-        "Rendimiento cuantico": st.session_state.get("quantum_yield_results"),
-        "Procesamiento": st.session_state.get("processing_results"),
-    }
-    available = {name: df for name, df in report_sources.items() if isinstance(df, pd.DataFrame) and not df.empty}
-
-    if available:
-        st.markdown("### Resultados disponibles")
-        selected_sections = []
-        for name, df in available.items():
-            include = st.checkbox(f"Incluir {name}", value=True, key=f"report_include_{name}")
-            st.write(f"{name}: {len(df)} filas, {len(df.columns)} columnas")
-            if include:
-                selected_sections.append(name)
-
-        for name in selected_sections:
-            with st.expander(name, expanded=False):
-                st.dataframe(available[name], use_container_width=True, hide_index=True)
-
-        if selected_sections:
-            excel_buf = io.BytesIO()
-            with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-                for name in selected_sections:
-                    sheet_name = name.replace(" ", "_")[:31]
-                    available[name].to_excel(writer, sheet_name=sheet_name, index=False)
-                if st.session_state.get("processed_spectra"):
-                    combined_processed = pd.concat([s["df"] for s in st.session_state["processed_spectra"]], ignore_index=True)
-                    combined_processed.to_excel(writer, sheet_name="processed_spectra"[:31], index=False)
-            excel_buf.seek(0)
-            st.download_button(
-                "Download Excel report",
-                data=excel_buf.getvalue(),
-                file_name="SpectraLab_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-    else:
-        st.info("Aun no hay resultados guardados en la sesion. Ejecuta CIE, Visor, Rendimiento cuantico o Procesamiento primero.")
-
-    st.markdown("### Importar tabla externa")
-    external_report = st.file_uploader("Opcional: sube un CSV/XLSX para revisarlo aqui", type=["csv", "xlsx"], key="report_external")
-    if external_report is not None:
-        try:
-            raw = external_report.getvalue()
-            if external_report.name.lower().endswith(".xlsx"):
-                sheet_names = pd.ExcelFile(io.BytesIO(raw)).sheet_names
-                sheet = st.selectbox("Hoja", options=sheet_names, key="report_external_sheet")
-                ext_df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
-            else:
-                ext_df = _quick_read_csv(raw)
-            st.dataframe(ext_df, use_container_width=True)
-        except Exception as e:
-            st.error(f"No se pudo leer la tabla externa: {e}")
-    st.stop()
-
-st.title("CIE 1931 - Chromaticity coordinates from emission spectra")
-
-# ----------------- Sidebar (global) -----------------
-st.sidebar.header("Global parameters")
-wl_min_default = st.sidebar.number_input("Minimum wavelength (nm)", min_value=200, max_value=10000, value=380)
-wl_max_default = st.sidebar.number_input("Maximum wavelength (nm)", min_value=200, max_value=10000, value=780)
-interp_interval_default = st.sidebar.selectbox("Interpolation interval (nm)", options=[1, 2, 5, 10], index=2)
-dpi_save = st.sidebar.number_input("DPI for TIFF export", min_value=72, max_value=1200, value=600)
-
-# ---- Diagram customization ----
+# ---- Personalizacion del diagrama ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("Diagram customization")
+st.sidebar.subheader("Personalizacion del diagrama")
 
-plot_title = st.sidebar.text_input("Plot title", value="CIE 1931 chromaticity diagram")
-x_axis_label = st.sidebar.text_input("X-axis label", value="x-chromaticity coordinate")
-y_axis_label = st.sidebar.text_input("Y-axis label", value="y-chromaticity coordinate")
+plot_title = st.sidebar.text_input("Titulo del grafico", value="Diagrama de cromaticidad CIE 1931")
+x_axis_label = st.sidebar.text_input("Etiqueta eje X", value="Coordenada de cromaticidad x")
+y_axis_label = st.sidebar.text_input("Etiqueta eje Y", value="Coordenada de cromaticidad y")
 
-def _safe_mpl_text(s: str) -> str:
-    """Avoid Matplotlib failures caused by invalid mathtext.
+title_color = st.sidebar.color_picker("Color del titulo", "#000000")
+axes_color = st.sidebar.color_picker("Color de ejes y marcas", "#000000")
+locus_label_color = st.sidebar.color_picker("Color de numeros de longitud de onda", "#000000")
 
-    Matplotlib tries to interpret mathtext when it sees '$'. If the user enters
-    one '$' by itself, tight_layout can fail.
-    """
-    s = "" if s is None else str(s)
-    if s.count("$") % 2 == 1:
-        s = s.replace("$", "")
-    return s
+title_font_family = st.sidebar.selectbox("Fuente del titulo", options=["sans-serif", "serif", "monospace"], index=0)
+title_font_size = st.sidebar.number_input("Tamano de fuente del titulo", min_value=8, max_value=48, value=14)
 
-title_color = st.sidebar.color_picker("Title color", "#000000")
-axes_color = st.sidebar.color_picker("Axes and tick color", "#000000")
-locus_label_color = st.sidebar.color_picker("Wavelength label color (numbers)", "#000000")
+tick_font_family = st.sidebar.selectbox("Fuente de marcas", options=["sans-serif", "serif", "monospace"], index=0)
+tick_font_size = st.sidebar.number_input("Tamano de marcas", min_value=6, max_value=24, value=10)
 
-title_font_family = st.sidebar.selectbox("Title font", options=["sans-serif", "serif", "monospace"], index=0)
-title_font_size = st.sidebar.number_input("Title font size", min_value=8, max_value=48, value=14)
+locus_numbers_font_family = st.sidebar.selectbox("Fuente de numeros (locus)", options=["sans-serif", "serif", "monospace"], index=0)
+locus_numbers_font_size = st.sidebar.number_input("Tamano de numeros (locus)", min_value=6, max_value=24, value=8)
 
-tick_font_family = st.sidebar.selectbox("Tick font", options=["sans-serif", "serif", "monospace"], index=0)
-tick_font_size = st.sidebar.number_input("Tick size", min_value=6, max_value=24, value=10)
+axes_linewidth = st.sidebar.slider("Grosor de ejes", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
 
-locus_numbers_font_family = st.sidebar.selectbox("Wavelength number font (locus)", options=["sans-serif", "serif", "monospace"], index=0)
-locus_numbers_font_size = st.sidebar.number_input("Wavelength number size (locus)", min_value=6, max_value=24, value=8)
-
-axes_linewidth = st.sidebar.slider("Axis spine width", min_value=0.5, max_value=5.0, value=1.0, step=0.1)
-
-show_point_labels = st.sidebar.checkbox("Show labels next to each point", value=True)
+show_point_labels = st.sidebar.checkbox("Mostrar etiquetas junto a cada punto", value=True)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Legend")
-legend_loc = st.sidebar.selectbox("Location", options=[
+st.sidebar.subheader("Leyenda")
+legend_loc = st.sidebar.selectbox("Ubicacion", options=[
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center", "center"
 ], index=0)
-legend_font_size = st.sidebar.number_input("Font size", min_value=6, max_value=24, value=8)
-legend_ncols = st.sidebar.slider("Columns", min_value=1, max_value=4, value=1)
-legend_box_color = st.sidebar.color_picker("Background", "#FFFFFF")
-legend_box_alpha = st.sidebar.slider("Background opacity", min_value=0.0, max_value=1.0, value=0.85)
-legend_box_linewidth = st.sidebar.slider("Border width", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
+legend_font_size = st.sidebar.number_input("Tamano de fuente", min_value=6, max_value=24, value=8)
+legend_ncols = st.sidebar.slider("Columnas", min_value=1, max_value=4, value=1)
+legend_box_color = st.sidebar.color_picker("Fondo", "#FFFFFF")
+legend_box_alpha = st.sidebar.slider("Opacidad de fondo", min_value=0.0, max_value=1.0, value=0.85)
+legend_box_linewidth = st.sidebar.slider("Grosor del borde", min_value=0.0, max_value=4.0, value=0.8, step=0.1)
 
-# ---- Dominant wavelength / purity ----
+# ---- Longitud dominante / pureza ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("Dominant wavelength / purity")
+st.sidebar.subheader("Longitud de onda dominante / pureza")
 
-wp_mode = st.sidebar.selectbox("White point", ["E (0.3333, 0.3333)", "D65 (0.3127, 0.3290)", "Custom"], index=0)
+wp_mode = st.sidebar.selectbox("Punto blanco", ["E (0.3333, 0.3333)", "D65 (0.3127, 0.3290)", "Personalizado"], index=0)
 if wp_mode.startswith("E"):
     WHITE_POINT = (0.3333, 0.3333)
 elif wp_mode.startswith("D65"):
     WHITE_POINT = (0.3127, 0.3290)
 else:
-    wp_x = st.sidebar.number_input("White point x", min_value=0.0, max_value=1.0, value=0.3333, step=0.0001, format="%.4f")
-    wp_y = st.sidebar.number_input("White point y", min_value=0.0, max_value=1.0, value=0.3333, step=0.0001, format="%.4f")
+    wp_x = st.sidebar.number_input("Punto blanco x", min_value=0.0, max_value=1.0, value=0.3333, step=0.0001, format="%.4f")
+    wp_y = st.sidebar.number_input("Punto blanco y", min_value=0.0, max_value=1.0, value=0.3333, step=0.0001, format="%.4f")
     WHITE_POINT = (float(wp_x), float(wp_y))
 
-# ----------------- Uploaders -----------------
-st.markdown("### Upload data")
-st.caption("CSV: one or more files. XLSX: one or more files (all sheets are processed).")
+# ----------------- Carga de archivos -----------------
+st.markdown("### Subir datos")
+st.caption("CSV: uno o mas archivos. XLSX: uno o mas archivos (se procesan todas las hojas).")
 
-csv_files = st.file_uploader("Upload one or more CSV files", type=["csv"], accept_multiple_files=True)
-xlsx_files = st.file_uploader("Upload one or more Excel files (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+csv_files = st.file_uploader("Sube uno o mas archivos CSV", type=["csv"], accept_multiple_files=True)
+xlsx_files = st.file_uploader("Sube uno o mas archivos Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-# ----------------- Helpers: file reading -----------------
-def uploaded_to_bytes(uploaded):
-    if uploaded is None:
-        return b""
-    try:
-        return uploaded.getvalue()
-    except Exception:
-        try:
-            uploaded.seek(0)
-        except Exception:
-            pass
-        return uploaded.read()
-
-def read_csv_flexible_bytes(raw: bytes) -> pd.DataFrame:
-    if not raw:
-        raise ValueError("The file is empty or could not be read.")
-    bio = io.BytesIO(raw)
-
-    trials = [
-        (";", ","), (";", "."),
-        (",", ","), (",", "."),
-        (None, ","), (None, "."),
-    ]
-    last_err = None
-    for sep, dec in trials:
-        try:
-            bio.seek(0)
-            df = pd.read_csv(bio, sep=sep, engine="python" if sep is None else "c", decimal=dec)
-            if df.shape[1] >= 2:
-                return df
-        except Exception as e:
-            last_err = e
-
-    try:
-        bio.seek(0)
-        df = pd.read_csv(bio, sep=r"\s+", engine="python")
-        if df.shape[1] >= 2:
-            return df
-    except Exception as e:
-        last_err = e
-
-    raise ValueError(f"Could not read the CSV file (separator/decimal format). Last error: {last_err}")
-
-@st.cache_data(show_spinner=False)
-def load_csv_df(raw: bytes) -> pd.DataFrame:
-    return read_csv_flexible_bytes(raw)
-
-@st.cache_data(show_spinner=False)
-def list_excel_sheets(raw: bytes):
-    xls = pd.ExcelFile(io.BytesIO(raw))
-    return xls.sheet_names
-
-@st.cache_data(show_spinner=False)
-def load_excel_sheet(raw: bytes, sheet: str) -> pd.DataFrame:
-    return pd.read_excel(io.BytesIO(raw), sheet_name=sheet)
-
-# ----------------- Helpers: columns (auto-detection) -----------------
-_WL_HINTS = [
-    "wavelength", "wavelength (nm)", "lambda", "wl", "nm",
-    "wavelength", "wavelength", "wavelength", "wave"
-]
-_INT_HINTS = [
-    "intensity", "intensity (a.u.)", "a.u.", "au", "counts", "cps", "signal",
-    "emission", "fluorescence", "fluorescencia"
-]
-
-def _norm_colname(c):
-    return str(c).strip().lower().replace("\ufeff", "").replace("\u00b5", "u")
-
-def guess_columns(df: pd.DataFrame):
-    cols = list(df.columns)
-    if len(cols) < 2:
-        return None, None
-
-    norm = [_norm_colname(c) for c in cols]
-
-    wl_idx = None
-    int_idx = None
-
-    for i, n in enumerate(norm):
-        if any(h in n for h in _WL_HINTS):
-            wl_idx = i
-            break
-    for i, n in enumerate(norm):
-        if any(h in n for h in _INT_HINTS):
-            int_idx = i
-            break
-
-    if wl_idx is None or int_idx is None or wl_idx == int_idx:
-        numeric_scores = []
-        for i, c in enumerate(cols):
-            s = pd.to_numeric(df[c].astype(str).str.replace(",", "."), errors="coerce")
-            numeric_scores.append((i, float(s.notna().mean())))
-        numeric_scores.sort(key=lambda x: x[1], reverse=True)
-        if wl_idx is None and numeric_scores:
-            wl_idx = numeric_scores[0][0]
-        if int_idx is None and len(numeric_scores) > 1:
-            int_idx = numeric_scores[1][0]
-        if wl_idx == int_idx and len(numeric_scores) > 1:
-            int_idx = numeric_scores[1][0]
-
-    return cols[wl_idx] if wl_idx is not None else None, cols[int_idx] if int_idx is not None else None
-
-def to_numeric_series(s: pd.Series):
-    return pd.to_numeric(s.astype(str).str.replace(",", "."), errors="coerce")
-
-# ----------------- CMF arrays (no deepcopy) -----------------
-@st.cache_data(show_spinner=False)
-def cmfs_arrays():
-    cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
-
-    if hasattr(cmfs, "wavelengths"):
-        wls = np.asarray(cmfs.wavelengths, dtype=float)
-    elif hasattr(cmfs, "domain"):
-        wls = np.asarray(cmfs.domain, dtype=float)
-    else:
-        wls = np.asarray(cmfs.index, dtype=float)
-
-    vals = np.asarray(cmfs.values, dtype=float)
-    if vals.shape[0] == 3 and vals.shape[1] == wls.shape[0]:
-        vals = vals.T
-    return wls, vals[:, 0], vals[:, 1], vals[:, 2]
-
-CMF_WLS, CMF_X, CMF_Y, CMF_Z = cmfs_arrays()
-CMF_MIN, CMF_MAX = float(np.min(CMF_WLS)), float(np.max(CMF_WLS))
-
-@st.cache_data(show_spinner=False)
-def locus_arrays(wl_start=380, wl_end=780):
-    m = (CMF_WLS >= wl_start) & (CMF_WLS <= wl_end)
-    wls = CMF_WLS[m]
-    xbar, ybar, zbar = CMF_X[m], CMF_Y[m], CMF_Z[m]
-    den = xbar + ybar + zbar
-    den = np.where(den == 0, np.nan, den)
-    x = xbar / den
-    y = ybar / den
-    xy = np.column_stack([x, y])
-    ok = np.isfinite(xy).all(axis=1)
-    return wls[ok].astype(float), xy[ok]
-
-LOCUS_WLS_F, LOCUS_XY = locus_arrays(380, 780)
-
-# ----------------- Geometry: dominant wavelength / purity -----------------
-def _cross2(a, b):
-    return a[0] * b[1] - a[1] * b[0]
-
-def _ray_segment_intersection(w, v, p0, p1, eps=1e-12):
-    s = p1 - p0
-    rxs = _cross2(v, s)
-    if abs(rxs) < eps:
-        return None
-    q_p = p0 - w
-    t = _cross2(q_p, s) / rxs
-    u = _cross2(q_p, v) / rxs
-    if t >= 0 and 0 <= u <= 1:
-        return t, u
-    return None
-
-def dominant_wavelength_and_purity(x, y, white_point=(0.3333, 0.3333)):
-    w = np.array([white_point[0], white_point[1]], dtype=float)
-    p = np.array([x, y], dtype=float)
-    v = p - w
-    if not np.isfinite(v).all() or (abs(v[0]) < 1e-15 and abs(v[1]) < 1e-15):
-        return np.nan, np.nan, "Undefined"
-
-    best = None  # (t, kind, i, u, q)
-    for i in range(len(LOCUS_XY) - 1):
-        p0 = LOCUS_XY[i]
-        p1 = LOCUS_XY[i + 1]
-        hit = _ray_segment_intersection(w, v, p0, p1)
-        if hit is None:
-            continue
-        t, u = hit
-        if best is None or t < best[0]:
-            best = (t, "locus", i, u, w + t * v)
-
-    # purple line
-    p0 = LOCUS_XY[-1]
-    p1 = LOCUS_XY[0]
-    hit = _ray_segment_intersection(w, v, p0, p1)
-    if hit is not None:
-        t, u = hit
-        if best is None or t < best[0]:
-            best = (t, "purple", -1, u, w + t * v)
-
-    if best is None:
-        return np.nan, np.nan, "No intersection"
-
-    _, kind, i, u, q = best
-    d_wp_p = float(np.linalg.norm(p - w))
-    d_wp_q = float(np.linalg.norm(q - w))
-    purity = (d_wp_p / d_wp_q) * 100.0 if d_wp_q > 0 else np.nan
-
-    if kind == "locus":
-        wl0 = float(LOCUS_WLS_F[i])
-        wl1 = float(LOCUS_WLS_F[i + 1])
-        wl = wl0 + u * (wl1 - wl0)
-        return wl, purity, "Dominant"
-
-    # complementary wavelength (opposite ray)
-    v2 = -v
-    best2 = None
-    for j in range(len(LOCUS_XY) - 1):
-        p0 = LOCUS_XY[j]
-        p1 = LOCUS_XY[j + 1]
-        hit2 = _ray_segment_intersection(w, v2, p0, p1)
-        if hit2 is None:
-            continue
-        t2, u2 = hit2
-        if best2 is None or t2 < best2[0]:
-            best2 = (t2, j, u2)
-
-    if best2 is None:
-        return np.nan, purity, "Purple (no complementary)"
-
-    _, j, u2 = best2
-    wl0 = float(LOCUS_WLS_F[j])
-    wl1 = float(LOCUS_WLS_F[j + 1])
-    wl_comp = wl0 + u2 * (wl1 - wl0)
-    return wl_comp, purity, "Complementary"
-
-# ----------------- Numerical integration: spectrum -> xy -----------------
-def spectrum_to_xy(wl_grid, intensity_grid):
-    xbar = np.interp(wl_grid, CMF_WLS, CMF_X)
-    ybar = np.interp(wl_grid, CMF_WLS, CMF_Y)
-    zbar = np.interp(wl_grid, CMF_WLS, CMF_Z)
-
-    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-    X = float(integrate(intensity_grid * xbar, wl_grid))
-    Y = float(integrate(intensity_grid * ybar, wl_grid))
-    Z = float(integrate(intensity_grid * zbar, wl_grid))
-
-    S = X + Y + Z
-    if not np.isfinite(S) or S <= 0:
-        raise ValueError("Invalid XYZ values (intensities are near zero in the selected range).")
-    return X / S, Y / S
-
-# ----------------- Preprocessing -----------------
-def preprocess_spectrum(df, wl_col, int_col,
-                        wl_min_local, wl_max_local, interp_interval_local,
-                        clip_negative=False,
-                        baseline_subtract_min=False,
-                        smooth_method="None",
-                        smooth_window=11,
-                        smooth_poly=3,
-                        normalize_mode="None"):
-    out = pd.DataFrame()
-    out["wavelength"] = to_numeric_series(df[wl_col])
-    out["intensity"] = to_numeric_series(df[int_col])
-    out = out.dropna()
-    out = out[(out["wavelength"] >= wl_min_local) & (out["wavelength"] <= wl_max_local)].copy()
-    if out.empty:
-        raise ValueError("No data found in the selected wavelength range.")
-    out = out.sort_values("wavelength")
-    out = out.groupby("wavelength", as_index=False)["intensity"].mean()
-
-    if baseline_subtract_min:
-        out["intensity"] = out["intensity"] - float(out["intensity"].min())
-
-    if clip_negative:
-        out["intensity"] = out["intensity"].clip(lower=0)
-
-    wl_grid = np.arange(wl_min_local, wl_max_local + 1e-9, interp_interval_local, dtype=float)
-    intensity_grid = np.interp(
-        wl_grid,
-        out["wavelength"].values.astype(float),
-        out["intensity"].values.astype(float),
-        left=0.0, right=0.0
-    )
-
-    if smooth_method == "Moving average":
-        w = int(max(3, smooth_window))
-        if w % 2 == 0:
-            w += 1
-        kernel = np.ones(w, dtype=float) / w
-        intensity_grid = np.convolve(intensity_grid, kernel, mode="same")
-    elif smooth_method == "Savitzky-Golay" and _HAS_SCIPY:
-        n = int(len(intensity_grid))
-        w = min(int(max(5, smooth_window)), n if n % 2 == 1 else n - 1)
-        if w % 2 == 0:
-            w -= 1
-        p = int(max(2, smooth_poly))
-        if w >= 3 and p >= w:
-            p = w - 1
-        if w >= 3 and p < w:
-            intensity_grid = savgol_filter(intensity_grid, window_length=w, polyorder=p, mode="interp")
-
-    integrate = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-    if normalize_mode == "Max = 1":
-        m = float(np.max(np.abs(intensity_grid)))
-        if m > 0:
-            intensity_grid = intensity_grid / m
-    elif normalize_mode == "Area = 1":
-        area = float(integrate(np.abs(intensity_grid), wl_grid))
-        if area > 0:
-            intensity_grid = intensity_grid / area
-
-    if float(np.max(np.abs(intensity_grid))) <= 0:
-        raise ValueError("Zero intensity in the selected range (check columns and range).")
-
-    return wl_grid, intensity_grid
-
-# ----------------- Build datasets -----------------
+# ----------------- Construccion de datasets -----------------
 datasets = []
 
 if csv_files:
@@ -1298,7 +952,7 @@ if csv_files:
             df = load_csv_df(raw)
             datasets.append({"id": f"csv_{i}", "name": f.name, "df": df})
         except Exception as e:
-            st.error(f"Error reading CSV {f.name}: {e}")
+            st.error(f"Error al leer CSV {f.name}: {e}")
 
 if xlsx_files:
     for j, f in enumerate(xlsx_files):
@@ -1308,16 +962,16 @@ if xlsx_files:
         try:
             sheets = list_excel_sheets(raw)
         except Exception as e:
-            st.error(f"Error reading Excel {f.name}: {e}")
+            st.error(f"Error al leer Excel {f.name}: {e}")
             continue
         for k, sh in enumerate(sheets):
             try:
                 df = load_excel_sheet(raw, sh)
                 datasets.append({"id": f"xlsx_{j}_{k}", "name": f"{f.name} - {sh}", "df": df})
             except Exception as e:
-                st.error(f"Error reading {f.name} | sheet {sh}: {e}")
+                st.error(f"Error al leer {f.name} | hoja {sh}: {e}")
 
-# ----------------- Per-dataset configuration -----------------
+# ----------------- Configuracion por dataset -----------------
 def init_cfg(ds):
     df = ds["df"]
     cols = list(df.columns)
@@ -1341,6 +995,7 @@ def init_cfg(ds):
         "normalize": "None",
     }
 
+
 def get_cfg(ds):
     key = f"cfg_{ds['id']}"
     if key not in st.session_state:
@@ -1358,52 +1013,51 @@ def get_cfg(ds):
 
 
 def render_cfg_form(ds, cfg, key_prefix="dlg_"):
-    """Per-sample configuration form.
-    key_prefix avoids widget-key collisions and lets Streamlit manage state reliably.
-    """
+    """Formulario de configuracion por muestra.
+    key_prefix evita colisiones de keys de widgets entre dialogos."""
     ds_id = ds["id"]
     keyp = f"{key_prefix}{ds_id}_"
     cols = list(ds["df"].columns)
 
-    st.markdown("Columns")
-    wl_col = st.selectbox("Wavelength column", options=cols,
+    st.markdown("Columnas")
+    wl_col = st.selectbox("Columna de longitud de onda", options=cols,
                           index=cols.index(cfg["wl_col"]) if cfg["wl_col"] in cols else 0,
                           key=f"{keyp}wlcol")
     int_default_index = cols.index(cfg["int_col"]) if cfg["int_col"] in cols else min(1, len(cols) - 1)
-    int_col = st.selectbox("Intensity column", options=cols,
+    int_col = st.selectbox("Columna de intensidad", options=cols,
                            index=int_default_index,
                            key=f"{keyp}intcol")
 
-    st.markdown("Point style")
-    label = st.text_input("Label", value=cfg["label"], key=f"{keyp}label")
+    st.markdown("Estilo del punto")
+    label = st.text_input("Etiqueta", value=cfg["label"], key=f"{keyp}label")
     color = st.color_picker("Color", value=cfg["color"], key=f"{keyp}color")
-    spectrum_color = st.color_picker("Spectrum line color", value=cfg["spectrum_color"], key=f"{keyp}spectrum_color")
-    marker_opts = ['o','s','^','x','D','*','v']
-    marker = st.selectbox("Marker", options=marker_opts,
+    spectrum_color = st.color_picker("Color de la linea del espectro", value=cfg["spectrum_color"], key=f"{keyp}spectrum_color")
+    marker_opts = ['o', 's', '^', 'x', 'D', '*', 'v']
+    marker = st.selectbox("Marcador", options=marker_opts,
                           index=marker_opts.index(cfg["marker"]) if cfg["marker"] in marker_opts else 0,
                           key=f"{keyp}marker")
-    size = st.slider("Size (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"{keyp}size")
+    size = st.slider("Tamano (s)", min_value=20, max_value=500, value=int(cfg["size"]), key=f"{keyp}size")
 
-    st.markdown("Calculation range")
-    wl_min = st.number_input("Min wavelength (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"{keyp}wlmin")
-    wl_max = st.number_input("Max wavelength (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"{keyp}wlmax")
-    interp_opts = [1,2,5,10]
-    interp = st.selectbox("Interval (nm)", options=interp_opts,
+    st.markdown("Rango de calculo")
+    wl_min = st.number_input("Longitud de onda minima (nm)", min_value=200, max_value=10000, value=int(cfg["wl_min"]), key=f"{keyp}wlmin")
+    wl_max = st.number_input("Longitud de onda maxima (nm)", min_value=200, max_value=10000, value=int(cfg["wl_max"]), key=f"{keyp}wlmax")
+    interp_opts = [1, 2, 5, 10]
+    interp = st.selectbox("Intervalo (nm)", options=interp_opts,
                           index=interp_opts.index(int(cfg["interp"])) if int(cfg["interp"]) in interp_opts else 1,
                           key=f"{keyp}interp")
 
-    st.markdown("Preprocessing")
-    baseline_subtract_min = st.checkbox("Baseline: subtract minimum (shift to 0)", value=bool(cfg["baseline_subtract_min"]), key=f"{keyp}base")
-    clip_negative = st.checkbox("Clip negative intensities to 0", value=bool(cfg["clip_negative"]), key=f"{keyp}clip")
+    st.markdown("Preprocesamiento")
+    baseline_subtract_min = st.checkbox("Linea base: restar minimo (desplazar a 0)", value=bool(cfg["baseline_subtract_min"]), key=f"{keyp}base")
+    clip_negative = st.checkbox("Recortar intensidades negativas a 0", value=bool(cfg["clip_negative"]), key=f"{keyp}clip")
 
     smooth_options = ["None", "Moving average"] + (["Savitzky-Golay"] if _HAS_SCIPY else [])
-    smooth_method = st.selectbox("Smoothing", options=smooth_options,
+    smooth_method = st.selectbox("Suavizado", options=smooth_options,
                                  index=smooth_options.index(cfg["smooth_method"]) if cfg["smooth_method"] in smooth_options else 0,
                                  key=f"{keyp}smooth")
-    smooth_window = st.slider("Window (smoothing)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"{keyp}win")
-    smooth_poly = st.slider("Polynomial order (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"{keyp}poly")
-    normalize = st.selectbox("Normalization", options=["None", "Max = 1", "Area = 1"],
-                             index=["None","Max = 1","Area = 1"].index(cfg["normalize"]) if cfg["normalize"] in ["None","Max = 1","Area = 1"] else 0,
+    smooth_window = st.slider("Ventana (suavizado)", min_value=3, max_value=101, value=int(cfg["smooth_window"]), step=2, key=f"{keyp}win")
+    smooth_poly = st.slider("Orden del polinomio (Savitzky-Golay)", min_value=2, max_value=7, value=int(cfg["smooth_poly"]), step=1, key=f"{keyp}poly")
+    normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"],
+                             index=["None", "Max = 1", "Area = 1"].index(cfg["normalize"]) if cfg["normalize"] in ["None", "Max = 1", "Area = 1"] else 0,
                              key=f"{keyp}norm")
 
     return {
@@ -1426,18 +1080,20 @@ def render_cfg_form(ds, cfg, key_prefix="dlg_"):
     }
 
 
-# ----------------- Per-sample configuration (modal) -----------------
+# ----------------- Configuracion por muestra (modal) -----------------
 if "open_cfg_id" not in st.session_state:
     st.session_state["open_cfg_id"] = None
+
 
 def request_open_config(ds_id: str):
     st.session_state["open_cfg_id"] = ds_id
     st.rerun()
 
+
 def handle_config_dialog(datasets_by_id):
-    """If a sample is selected, open the dialog and stop the rest of the script.
-    This prevents the app from calculating with stale config during the same run.
-    """
+    """Si hay una muestra seleccionada, abre el dialogo y detiene el resto
+    del script. Esto evita calcular con configuracion desactualizada en la
+    misma ejecucion."""
     ds_id = st.session_state.get("open_cfg_id", None)
     if not ds_id:
         return
@@ -1448,7 +1104,7 @@ def handle_config_dialog(datasets_by_id):
         return
 
     cfg = get_cfg(ds)
-    title = f"Configure: {ds['name']}"
+    title = f"Configurar: {ds['name']}"
 
     if HAS_DIALOG:
         @DIALOG_DECORATOR(title)
@@ -1457,9 +1113,9 @@ def handle_config_dialog(datasets_by_id):
                 new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
                 cA, cB = st.columns(2)
                 with cA:
-                    submitted = st.form_submit_button("Save")
+                    submitted = st.form_submit_button("Guardar")
                 with cB:
-                    cancelled = st.form_submit_button("Cancel")
+                    cancelled = st.form_submit_button("Cancelar")
             if submitted:
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
                 st.session_state["open_cfg_id"] = None
@@ -1474,19 +1130,20 @@ def handle_config_dialog(datasets_by_id):
         with st.expander(title, expanded=True):
             new_cfg = render_cfg_form(ds, cfg, key_prefix="dlg_")
             cA, cB = st.columns(2)
-            if cA.button("Save", key=f"save_{ds_id}"):
+            if cA.button("Guardar", key=f"save_{ds_id}"):
                 st.session_state[f"cfg_{ds_id}"] = new_cfg
                 st.session_state["open_cfg_id"] = None
                 st.rerun()
-            if cB.button("Cancel", key=f"cancel_{ds_id}"):
+            if cB.button("Cancelar", key=f"cancel_{ds_id}"):
                 st.session_state["open_cfg_id"] = None
                 st.rerun()
         st.stop()
 
+
 datasets_by_id = {ds['id']: ds for ds in datasets}
 handle_config_dialog(datasets_by_id)
 
-# ----------------- CIE figure
+# ----------------- Figura CIE -----------------
 fig, ax = plt.subplots(figsize=(7, 7))
 try:
     try:
@@ -1552,13 +1209,13 @@ try:
 except Exception:
     pass
 
-# ----------------- Process -----------------
+# ----------------- Procesar muestras -----------------
 results = []
 spectra_to_plot = []
 
 if datasets:
-    st.markdown("### Samples")
-    st.caption("Per-sample options: Configure button (popup dialog). Results are shown in the analysis collage below.")
+    st.markdown("### Muestras")
+    st.caption("Opciones por muestra: boton Configurar (ventana emergente). Los resultados se muestran en el resumen debajo.")
 
     for ds in datasets:
         cfg = get_cfg(ds)
@@ -1567,19 +1224,19 @@ if datasets:
         with c1:
             st.write(ds["name"])
         with c2:
-            if st.button("Configure", key=f"btn_cfg_{ds['id']}"):
+            if st.button("Configurar", key=f"btn_cfg_{ds['id']}"):
                 request_open_config(ds["id"])
         with c3:
-            st.write(f"Wavelength: {cfg['wl_min']}-{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
+            st.write(f"Longitud de onda: {cfg['wl_min']}-{cfg['wl_max']} nm | interp: {cfg['interp']} nm")
 
         try:
             df = ds["df"]
             if cfg["wl_min"] >= cfg["wl_max"]:
-                raise ValueError("Minimum wavelength must be lower than maximum wavelength.")
+                raise ValueError("La longitud de onda minima debe ser menor que la maxima.")
             if cfg["wl_min"] < CMF_MIN or cfg["wl_max"] > CMF_MAX:
-                raise ValueError(f"The range must be within the CMF domain: {CMF_MIN:.0f}-{CMF_MAX:.0f} nm.")
+                raise ValueError(f"El rango debe estar dentro del dominio de las CMF: {CMF_MIN:.0f}-{CMF_MAX:.0f} nm.")
             if cfg["wl_col"] not in df.columns or cfg["int_col"] not in df.columns:
-                raise ValueError("Selected columns do not exist in this file/sheet.")
+                raise ValueError("Las columnas seleccionadas no existen en este archivo/hoja.")
 
             wl_grid, intensity_grid = preprocess_spectrum(
                 df, cfg["wl_col"], cfg["int_col"],
@@ -1602,23 +1259,23 @@ if datasets:
                         bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1.0))
 
             results.append({
-                "Label": cfg["label"],
+                "Etiqueta": cfg["label"],
                 "x": float(x_val),
                 "y": float(y_val),
-                "Wavelength_nm": (float(wl_dom) if np.isfinite(wl_dom) else np.nan),
-                "Wavelength_type": wl_kind,
-                "Excitation_purity_%": (float(purity) if np.isfinite(purity) else np.nan),
+                "Longitud_onda_nm": (float(wl_dom) if np.isfinite(wl_dom) else np.nan),
+                "Tipo_longitud_onda": wl_kind,
+                "Pureza_excitacion_%": (float(purity) if np.isfinite(purity) else np.nan),
                 "wl_min_nm": int(cfg["wl_min"]),
                 "wl_max_nm": int(cfg["wl_max"]),
                 "interp_nm": int(cfg["interp"]),
-                "baseline_subtract_min": bool(cfg["baseline_subtract_min"]),
-                "clip_negative": bool(cfg["clip_negative"]),
-                "smooth_method": cfg["smooth_method"],
-                "smooth_window": int(cfg["smooth_window"]),
-                "smooth_poly": int(cfg["smooth_poly"]),
-                "normalize": cfg["normalize"],
-                "wl_column": cfg["wl_col"],
-                "intensity_column": cfg["int_col"],
+                "linea_base_restar_min": bool(cfg["baseline_subtract_min"]),
+                "recorte_negativos": bool(cfg["clip_negative"]),
+                "metodo_suavizado": cfg["smooth_method"],
+                "ventana_suavizado": int(cfg["smooth_window"]),
+                "orden_polinomio": int(cfg["smooth_poly"]),
+                "normalizacion": cfg["normalize"],
+                "columna_wl": cfg["wl_col"],
+                "columna_intensidad": cfg["int_col"],
             })
 
             spectra_to_plot.append({
@@ -1628,13 +1285,13 @@ if datasets:
                 "color": cfg.get("spectrum_color", cfg["color"])
             })
 
-            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | wavelength ({wl_kind})={wl_dom:.1f} nm | purity={purity:.1f}%")
+            st.success(f"{cfg['label']}: x={x_val:.4f}, y={y_val:.4f} | longitud de onda ({wl_kind})={wl_dom:.1f} nm | pureza={purity:.1f}%")
         except Exception as e:
             st.error(f"{cfg['label']}: {e}")
 else:
-    st.info("Upload files to begin.")
+    st.info("Sube archivos para comenzar.")
 
-# ----------------- Outputs -----------------
+# ----------------- Resultados -----------------
 if results:
     try:
         legend = ax.legend(loc=legend_loc, fontsize=legend_font_size, ncol=legend_ncols)
@@ -1645,63 +1302,65 @@ if results:
     except Exception:
         pass
 
-    st.markdown("### Analysis overview")
+    st.markdown("### Resumen del analisis")
     results_df = pd.DataFrame(results)
-    st.session_state["cie_results"] = results_df
     minimal_cols = [
-        "Label",
+        "Etiqueta",
         "x",
         "y",
-        "Wavelength_nm",
-        "Wavelength_type",
-        "Excitation_purity_%",
+        "Longitud_onda_nm",
+        "Tipo_longitud_onda",
+        "Pureza_excitacion_%",
     ]
     minimal_cols = [c for c in minimal_cols if c in results_df.columns]
     table_df = results_df[minimal_cols].copy()
     for c in ["x", "y"]:
         if c in table_df.columns:
             table_df[c] = table_df[c].map(lambda v: f"{v:.4f}" if np.isfinite(v) else "")
-    for c in ["Wavelength_nm", "Excitation_purity_%"]:
+    for c in ["Longitud_onda_nm", "Pureza_excitacion_%"]:
         if c in table_df.columns:
             table_df[c] = table_df[c].map(lambda v: f"{v:.1f}" if np.isfinite(v) else "")
 
     left_col, right_col = st.columns([1, 1], gap="large")
 
     with left_col:
-        st.markdown("### CIE 1931 diagram")
+        st.markdown("### Diagrama CIE 1931")
         try:
             plt.tight_layout()
         except Exception:
             pass
-        st.pyplot(fig)
+        show_and_close(fig)
 
     with right_col:
-        st.markdown("### Emission spectra")
+        st.markdown("### Espectros de emision")
         if spectra_to_plot:
             fig_s, ax_s = plt.subplots(figsize=(5.5, 3.2))
             for s in spectra_to_plot:
                 ax_s.plot(s["wl"], s["it"], label=s["label"], color=s["color"], linewidth=1.8)
-            ax_s.set_xlabel("Wavelength (nm)")
-            ax_s.set_ylabel("Intensity (a.u.)")
+            ax_s.set_xlabel("Longitud de onda (nm)")
+            ax_s.set_ylabel("Intensidad (u.a.)")
             ax_s.tick_params(labelsize=9)
             ax_s.grid(alpha=0.25)
             try:
                 ax_s.legend(fontsize=7, loc="best")
             except Exception:
                 pass
-            st.pyplot(fig_s)
+            show_and_close(fig_s)
         else:
-            st.info("No spectra to display.")
+            st.info("No hay espectros para mostrar.")
 
-        st.markdown("### Coordinate table")
+        st.markdown("### Tabla de coordenadas")
         st.dataframe(table_df, use_container_width=True, hide_index=True)
 
-        with st.expander("Downloads", expanded=False):
+        with st.expander("Descargas", expanded=False):
             csv_buf = io.StringIO()
             results_df.to_csv(csv_buf, index=False)
-            st.download_button("Download full CSV table", data=csv_buf.getvalue(), file_name="CIE1931_coordinates.csv", mime="text/csv")
+            st.download_button("Descargar tabla CSV completa", data=csv_buf.getvalue(), file_name="CIE1931_coordenadas.csv", mime="text/csv")
 
             img_buf = io.BytesIO()
             fig.savefig(img_buf, format="tiff", dpi=dpi_save)
             img_buf.seek(0)
-            st.download_button("Download TIFF diagram", data=img_buf.getvalue(), file_name="CIE1931_diagram.tiff", mime="image/tiff")
+            st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="CIE1931_diagrama.tiff", mime="image/tiff")
+else:
+    if datasets:
+        plt.close(fig)
