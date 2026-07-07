@@ -39,7 +39,7 @@ except Exception:
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="SpectraLab Toolkit")
-matplotlib.rcParams.update({'font.size': 12})
+matplotlib.rcParams.update({'font.size': 18})
 DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
 HAS_DIALOG = callable(DIALOG_DECORATOR)
 
