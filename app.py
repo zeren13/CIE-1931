@@ -570,10 +570,58 @@ if st.session_state["active_page"] != "Inicio":
             go_to_page(_page_name)
     st.sidebar.markdown("---")
 else:
+    st.sidebar.markdown(
+        """
+        <style>
+        .tool-wrap { padding: 2px 0 8px 0; }
+        .tool-wrap .tool-label {
+            padding: .35rem .6rem;
+            border-radius: 6px;
+            font-size: .95rem;
+            color: #31333F;
+            transition: background-color .15s ease, color .15s ease;
+        }
+        .tool-wrap:hover .tool-label {
+            background-color: #fca5a5;
+            color: #7f1d1d;
+        }
+        .tool-actions {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            margin-top: 4px;
+            transition: opacity .2s ease;
+        }
+        .tool-wrap:hover .tool-actions {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.sidebar.header("Herramientas")
-    for _tool_name in ["Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico"]:
-        if st.sidebar.button(_tool_name, use_container_width=True, key=f"tool_{_tool_name}"):
-            go_to_page(_tool_name)
+
+    _tools = [
+        ("Analisis CIE 1931", "cie", "CIE 1931"),
+        ("Visor de espectros", "visor", "Visor de espectros"),
+        ("Rendimiento cuantico", "rendimiento", "Rendimiento cuantico"),
+    ]
+    for _tool_name, _tool_key, _learn_topic in _tools:
+        st.sidebar.markdown(
+            f'<div class="tool-wrap"><div class="tool-label">{_tool_name}</div><div class="tool-actions">',
+            unsafe_allow_html=True,
+        )
+        _b1, _b2 = st.sidebar.columns(2)
+        with _b1:
+            if st.button("Calcular", key=f"{_tool_key}_calc", use_container_width=True):
+                go_to_page(_tool_name)
+        with _b2:
+            if st.button("Aprender", key=f"{_tool_key}_learn", use_container_width=True):
+                st.session_state["learn_topic"] = _learn_topic
+                go_to_page("Aprender")
+        st.sidebar.markdown("</div></div>", unsafe_allow_html=True)
 
 # ============================================================
 # Pagina: Inicio
