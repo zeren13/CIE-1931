@@ -1,5 +1,6 @@
 # app.py
 import io
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -16,6 +17,25 @@ try:
     _HAS_SCIPY = True
 except Exception:
     _HAS_SCIPY = False
+
+# Opcional: exportar reporte de rendimiento cuantico a Word
+try:
+    from docx import Document  # type: ignore
+    from docx.shared import Pt, RGBColor  # type: ignore
+    _HAS_DOCX = True
+except Exception:
+    _HAS_DOCX = False
+
+# Opcional: exportar reporte de rendimiento cuantico a PDF
+try:
+    from reportlab.lib.pagesizes import letter  # type: ignore
+    from reportlab.lib.styles import getSampleStyleSheet  # type: ignore
+    from reportlab.lib import colors as rl_colors  # type: ignore
+    from reportlab.lib.units import inch as rl_inch  # type: ignore
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle  # type: ignore
+    _HAS_REPORTLAB = True
+except Exception:
+    _HAS_REPORTLAB = False
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="SpectraLab Toolkit")
@@ -413,6 +433,132 @@ def show_and_close(fig):
     plt.close(fig)
 
 
+def build_quantum_yield_docx(data: dict) -> bytes:
+    """Genera un reporte .docx con los datos, la formula y el resultado
+    del calculo de rendimiento cuantico relativo."""
+    doc = Document()
+
+    title = doc.add_heading("Rendimiento cuantico relativo", level=1)
+    for run in title.runs:
+        run.font.color.rgb = RGBColor(0x7F, 0x1D, 0x1D)
+
+    doc.add_paragraph(f"Generado: {data['timestamp']}")
+    doc.add_paragraph(
+        "Metodo relativo: compara el area de emision integrada de la muestra con la de "
+        "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion."
+    )
+
+    doc.add_heading("Formula", level=2)
+    p = doc.add_paragraph()
+    p.add_run(
+        "\u03a6x = \u03a6ref \u00d7 (Ix / Iref) \u00d7 (Aref / Ax) \u00d7 (nx\u00b2 / nref\u00b2)"
+    ).italic = True
+
+    doc.add_heading("Datos de entrada", level=2)
+    table = doc.add_table(rows=1, cols=3)
+    table.style = "Light Grid Accent 1"
+    hdr = table.rows[0].cells
+    hdr[0].text = "Parametro"
+    hdr[1].text = "Muestra"
+    hdr[2].text = "Referencia"
+    rows = [
+        ("Area integrada", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"),
+        ("Absorbancia", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"),
+        ("Indice de refraccion", f"{data['sample_n']:.6g}", f"{data['ref_n']:.6g}"),
+        ("Rendimiento cuantico (Phi)", "-", f"{data['ref_phi']:.6g}"),
+    ]
+    for label, sample_val, ref_val in rows:
+        cells = table.add_row().cells
+        cells[0].text = label
+        cells[1].text = sample_val
+        cells[2].text = ref_val
+
+    doc.add_heading("Resultado", level=2)
+    result_p = doc.add_paragraph()
+    result_run = result_p.add_run(
+        f"\u03a6x = {data['phi']:.4f}  ({data['phi'] * 100:.2f} %)"
+    )
+    result_run.bold = True
+    result_run.font.size = Pt(14)
+
+    if data["phi"] > 1:
+        warn = doc.add_paragraph()
+        warn.add_run(
+            "Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias, "
+            "referencia o correcciones experimentales."
+        ).italic = True
+
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def build_quantum_yield_pdf(data: dict) -> bytes:
+    """Genera un reporte .pdf con los datos, la formula y el resultado
+    del calculo de rendimiento cuantico relativo."""
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(bio, pagesize=letter, topMargin=0.8 * rl_inch, bottomMargin=0.8 * rl_inch)
+    styles = getSampleStyleSheet()
+    title_style = styles["Title"]
+    title_style.textColor = rl_colors.HexColor("#7F1D1D")
+
+    story = [
+        Paragraph("Rendimiento cuantico relativo", title_style),
+        Spacer(1, 6),
+        Paragraph(f"Generado: {data['timestamp']}", styles["Normal"]),
+        Spacer(1, 10),
+        Paragraph(
+            "Metodo relativo: compara el area de emision integrada de la muestra con la de "
+            "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion.",
+            styles["Normal"],
+        ),
+        Spacer(1, 14),
+        Paragraph("<b>Formula</b>", styles["Heading2"]),
+        Paragraph(
+            "\u03a6x = \u03a6ref &times; (Ix / Iref) &times; (Aref / Ax) &times; (nx&sup2; / nref&sup2;)",
+            styles["Normal"],
+        ),
+        Spacer(1, 14),
+        Paragraph("<b>Datos de entrada</b>", styles["Heading2"]),
+    ]
+
+    table_data = [
+        ["Parametro", "Muestra", "Referencia"],
+        ["Area integrada", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"],
+        ["Absorbancia", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"],
+        ["Indice de refraccion", f"{data['sample_n']:.6g}", f"{data['ref_n']:.6g}"],
+        ["Rendimiento cuantico (Phi)", "-", f"{data['ref_phi']:.6g}"],
+    ]
+    tbl = Table(table_data, colWidths=[2.4 * rl_inch, 1.6 * rl_inch, 1.6 * rl_inch])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#FEE2E2")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.HexColor("#7F1D1D")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#E5E7EB")),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#F9FAFB")]),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 18))
+    story.append(Paragraph("<b>Resultado</b>", styles["Heading2"]))
+    story.append(Paragraph(
+        f"<font size=14><b>&Phi;x = {data['phi']:.4f}  ({data['phi'] * 100:.2f} %)</b></font>",
+        styles["Normal"],
+    ))
+    if data["phi"] > 1:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(
+            "<i>Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias, "
+            "referencia o correcciones experimentales.</i>",
+            styles["Normal"],
+        ))
+
+    doc.build(story)
+    bio.seek(0)
+    return bio.getvalue()
+
+
 # ============================================================
 # Navegacion global (sidebar) - vacia en Inicio, con enlaces en el resto
 # ============================================================
@@ -424,7 +570,10 @@ if st.session_state["active_page"] != "Inicio":
             go_to_page(_page_name)
     st.sidebar.markdown("---")
 else:
-    st.sidebar.empty()
+    st.sidebar.header("Herramientas")
+    for _tool_name in ["Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico"]:
+        if st.sidebar.button(_tool_name, use_container_width=True, key=f"tool_{_tool_name}"):
+            go_to_page(_tool_name)
 
 # ============================================================
 # Pagina: Inicio
@@ -438,27 +587,7 @@ if st.session_state["active_page"] == "Inicio":
             padding-bottom: 1rem;
         }
         .main .block-container h1 { margin-bottom: 0rem; }
-        .main .block-container h3 { margin-top: 0.25rem; margin-bottom: 0.5rem; }
-
-        .module-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 14px 14px 0 0;
-            border-bottom: none;
-            padding: 1.1rem 1.2rem;
-            background: #ffffff;
-            transition: box-shadow .2s ease, border-color .2s ease;
-        }
-        .module-card:hover {
-            border-color: #f87171;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        }
-        .module-card h4 { margin: 0 0 .35rem 0; }
-        .module-card p.card-desc {
-            margin: 0;
-            color: #4b5563;
-            font-size: .92rem;
-            min-height: 3.6em;
-        }
+        .main .block-container h3, .main .block-container h4 { margin-top: 0.25rem; margin-bottom: 0.5rem; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -466,62 +595,30 @@ if st.session_state["active_page"] == "Inicio":
     st.title("SpectraLab Toolkit")
     st.caption("Conjunto de herramientas para visualizar, comparar y analizar datos espectroscopicos.")
 
-    st.markdown("### Modulos principales")
-    st.write(
-        "Elige un modulo: calcula con tus propios datos o aprende la teoria detras del calculo."
-    )
+    st.write("")
+    box_left, box_right = st.columns(2, gap="large")
 
-    def module_card(title, desc):
-        st.markdown(
-            f"""
-            <div class="module-card">
-                <h4>{title}</h4>
-                <p class="card-desc">{desc}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    with box_left:
+        with st.container(border=True):
+            st.markdown("#### Citanos")
+            st.markdown(
+                "_Pendiente: agrega aqui la referencia bibliografica de tu articulo o publicacion._"
+            )
+            st.write("")
+            st.markdown("#### Contacto")
+            st.markdown("[ma.maciasl@uniandes.edu.co](mailto:ma.maciasl@uniandes.edu.co)")
+            st.write("camiloserrano02@hotmail.com")
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        module_card(
-            "Coordenadas CIE 1931",
-            "Calcula coordenadas cromaticas, longitud dominante, pureza y grafica el diagrama CIE.",
-        )
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Calcular", key="cie_calc", use_container_width=True):
-                go_to_page("Analisis CIE 1931")
-        with b2:
-            if st.button("Aprender", key="cie_info", use_container_width=True):
-                st.session_state["learn_topic"] = "CIE 1931"
-                go_to_page("Aprender")
-    with c2:
-        module_card(
-            "Visor de espectros",
-            "Carga espectros de absorcion, emision o excitacion en solucion o solido y comparalos.",
-        )
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Calcular", key="visor_calc", use_container_width=True):
-                go_to_page("Visor de espectros")
-        with b2:
-            if st.button("Aprender", key="visor_info", use_container_width=True):
-                st.session_state["learn_topic"] = "Visor de espectros"
-                go_to_page("Aprender")
-    with c3:
-        module_card(
-            "Rendimiento cuantico",
-            "Calcula rendimiento cuantico relativo usando muestra, referencia, absorbancia y area.",
-        )
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Calcular", key="rendimiento_calc", use_container_width=True):
-                go_to_page("Rendimiento cuantico")
-        with b2:
-            if st.button("Aprender", key="rendimiento_info", use_container_width=True):
-                st.session_state["learn_topic"] = "Rendimiento cuantico"
-                go_to_page("Aprender")
+    with box_right:
+        with st.container(border=True):
+            st.markdown("#### Logos")
+            try:
+                st.image("logog.jpg", use_container_width=True)
+            except Exception:
+                st.info(
+                    "No se encontro el archivo 'logog.jpg'. Colocalo en la misma carpeta "
+                    "que app.py para que el logo aparezca aqui."
+                )
 
     st.stop()
 
@@ -978,6 +1075,45 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     )
     if phi > 1:
         st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
+
+    st.markdown("### Exportar resultado")
+    st.caption("Genera un reporte con los datos de entrada, la formula y el resultado.")
+
+    report_data = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "sample_area": sample_area,
+        "sample_abs": sample_abs,
+        "sample_n": sample_n,
+        "ref_phi": ref_phi,
+        "ref_area": ref_area,
+        "ref_abs": ref_abs,
+        "ref_n": ref_n,
+        "phi": phi,
+    }
+
+    col_pdf, col_docx = st.columns(2)
+    with col_pdf:
+        if _HAS_REPORTLAB:
+            try:
+                pdf_bytes = build_quantum_yield_pdf(report_data)
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="rendimiento_cuantico.pdf",
+                                   mime="application/pdf", use_container_width=True)
+            except Exception as e:
+                st.error(f"No se pudo generar el PDF: {e}")
+        else:
+            st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
+    with col_docx:
+        if _HAS_DOCX:
+            try:
+                docx_bytes = build_quantum_yield_docx(report_data)
+                st.download_button("Descargar Word (.docx)", data=docx_bytes, file_name="rendimiento_cuantico.docx",
+                                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                   use_container_width=True)
+            except Exception as e:
+                st.error(f"No se pudo generar el documento Word: {e}")
+        else:
+            st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+
     st.stop()
 
 # ============================================================
@@ -990,7 +1126,7 @@ st.sidebar.header("Parametros globales")
 wl_min_default = st.sidebar.number_input("Longitud de onda minima (nm)", min_value=200, max_value=10000, value=380)
 wl_max_default = st.sidebar.number_input("Longitud de onda maxima (nm)", min_value=200, max_value=10000, value=780)
 interp_interval_default = st.sidebar.selectbox("Intervalo de interpolacion (nm)", options=[1, 2, 5, 10], index=2)
-dpi_save = st.sidebar.number_input("DPI para exportar TIFF", min_value=72, max_value=1200, value=600)
+dpi_save = st.sidebar.number_input("DPI para exportar imagenes", min_value=72, max_value=1200, value=600)
 
 # ---- Personalizacion del diagrama ----
 st.sidebar.markdown("---")
@@ -1467,10 +1603,23 @@ if results:
             results_df.to_csv(csv_buf, index=False)
             st.download_button("Descargar tabla CSV completa", data=csv_buf.getvalue(), file_name="CIE1931_coordenadas.csv", mime="text/csv")
 
-            img_buf = io.BytesIO()
-            fig.savefig(img_buf, format="tiff", dpi=dpi_save)
-            img_buf.seek(0)
-            st.download_button("Descargar diagrama TIFF", data=img_buf.getvalue(), file_name="CIE1931_diagrama.tiff", mime="image/tiff")
+            st.markdown("**Diagrama CIE 1931**")
+            dcol1, dcol2, dcol3 = st.columns(3)
+            with dcol1:
+                img_buf_png = io.BytesIO()
+                fig.savefig(img_buf_png, format="png", dpi=dpi_save, facecolor="white")
+                img_buf_png.seek(0)
+                st.download_button("Descargar PNG", data=img_buf_png.getvalue(), file_name="CIE1931_diagrama.png", mime="image/png", use_container_width=True)
+            with dcol2:
+                img_buf_jpg = io.BytesIO()
+                fig.savefig(img_buf_jpg, format="jpeg", dpi=dpi_save, facecolor="white")
+                img_buf_jpg.seek(0)
+                st.download_button("Descargar JPEG", data=img_buf_jpg.getvalue(), file_name="CIE1931_diagrama.jpg", mime="image/jpeg", use_container_width=True)
+            with dcol3:
+                img_buf_tiff = io.BytesIO()
+                fig.savefig(img_buf_tiff, format="tiff", dpi=dpi_save, facecolor="white")
+                img_buf_tiff.seek(0)
+                st.download_button("Descargar TIFF", data=img_buf_tiff.getvalue(), file_name="CIE1931_diagrama.tiff", mime="image/tiff", use_container_width=True)
 else:
     if datasets:
         plt.close(fig)
