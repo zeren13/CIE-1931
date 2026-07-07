@@ -26,36 +26,14 @@ HAS_DIALOG = callable(DIALOG_DECORATOR)
 if "active_page" not in st.session_state:
     st.session_state["active_page"] = "Inicio"
 
-# Apariencia unificada para todos los botones de la app (nativos y de tarjetas)
+# Hover suave en rojo para todos los botones de la app
 st.markdown(
     """
     <style>
-    div[data-testid="stButton"] > button:hover,
-    a.card-btn:hover {
+    div[data-testid="stButton"] > button:hover {
         background-color: #fca5a5 !important;
         border-color: #f87171 !important;
         color: #7f1d1d !important;
-    }
-    a.card-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 1;
-        text-align: center;
-        padding: 0.4rem 0.9rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(49, 51, 63, 0.2);
-        background-color: #ffffff;
-        color: #31333F;
-        font-family: inherit;
-        font-size: 1rem;
-        font-weight: 400;
-        line-height: 1.6;
-        text-decoration: none !important;
-        transition: background-color .15s ease, border-color .15s ease, color .15s ease;
-    }
-    a.card-btn:visited, a.card-btn:active, a.card-btn:focus {
-        text-decoration: none !important;
     }
     </style>
     """,
@@ -67,41 +45,6 @@ st.markdown(
 def go_to_page(page_name: str):
     st.session_state["active_page"] = page_name
     st.rerun()
-
-
-# Mapa de acciones para los enlaces de las tarjetas de Inicio (?goto=...)
-_GOTO_MAP = {
-    "cie_calc": ("Analisis CIE 1931", None),
-    "cie_info": ("Aprender", "CIE 1931"),
-    "visor_calc": ("Visor de espectros", None),
-    "visor_info": ("Aprender", "Visor de espectros"),
-    "rendimiento_calc": ("Rendimiento cuantico", None),
-    "rendimiento_info": ("Aprender", "Rendimiento cuantico"),
-}
-
-
-def _consume_goto_query_param():
-    try:
-        goto_val = st.query_params.get("goto", None)
-    except Exception:
-        goto_val = st.experimental_get_query_params().get("goto", [None])[0]
-
-    if goto_val in _GOTO_MAP:
-        page, topic = _GOTO_MAP[goto_val]
-        if topic:
-            st.session_state["learn_topic"] = topic
-        st.session_state["active_page"] = page
-        try:
-            st.query_params.clear()
-        except Exception:
-            try:
-                st.experimental_set_query_params()
-            except Exception:
-                pass
-        st.rerun()
-
-
-_consume_goto_query_param()
 
 
 # ============================================================
@@ -477,9 +420,7 @@ PAGES = ["Inicio", "Analisis CIE 1931", "Visor de espectros", "Rendimiento cuant
 if st.session_state["active_page"] != "Inicio":
     st.sidebar.header("Navegacion")
     for _page_name in PAGES:
-        _is_active = st.session_state["active_page"] == _page_name
-        if st.sidebar.button(_page_name, type="primary" if _is_active else "secondary",
-                             use_container_width=True, key=f"nav_{_page_name}"):
+        if st.sidebar.button(_page_name, use_container_width=True, key=f"nav_{_page_name}"):
             go_to_page(_page_name)
     st.sidebar.markdown("---")
 else:
@@ -501,7 +442,8 @@ if st.session_state["active_page"] == "Inicio":
 
         .module-card {
             border: 1px solid #e5e7eb;
-            border-radius: 14px;
+            border-radius: 14px 14px 0 0;
+            border-bottom: none;
             padding: 1.1rem 1.2rem;
             background: #ffffff;
             transition: box-shadow .2s ease, border-color .2s ease;
@@ -517,20 +459,6 @@ if st.session_state["active_page"] == "Inicio":
             font-size: .92rem;
             min-height: 3.6em;
         }
-        .card-actions {
-            display: flex;
-            gap: .5rem;
-            margin-top: .8rem;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transition: opacity .2s ease;
-        }
-        .module-card:hover .card-actions {
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -540,20 +468,15 @@ if st.session_state["active_page"] == "Inicio":
 
     st.markdown("### Modulos principales")
     st.write(
-        "Pasa el puntero sobre cada modulo para elegir entre calcular con tus propios datos "
-        "o aprender la teoria detras del calculo."
+        "Elige un modulo: calcula con tus propios datos o aprende la teoria detras del calculo."
     )
 
-    def module_card(title, desc, calc_goto, calc_label, info_goto, info_label):
+    def module_card(title, desc):
         st.markdown(
             f"""
             <div class="module-card">
                 <h4>{title}</h4>
                 <p class="card-desc">{desc}</p>
-                <div class="card-actions">
-                    <a class="card-btn" href="?goto={calc_goto}" target="_self">{calc_label}</a>
-                    <a class="card-btn" href="?goto={info_goto}" target="_self">{info_label}</a>
-                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -564,23 +487,41 @@ if st.session_state["active_page"] == "Inicio":
         module_card(
             "Coordenadas CIE 1931",
             "Calcula coordenadas cromaticas, longitud dominante, pureza y grafica el diagrama CIE.",
-            "cie_calc", "Calcular",
-            "cie_info", "Aprender sobre CIE 1931",
         )
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Calcular", key="cie_calc", use_container_width=True):
+                go_to_page("Analisis CIE 1931")
+        with b2:
+            if st.button("Aprender", key="cie_info", use_container_width=True):
+                st.session_state["learn_topic"] = "CIE 1931"
+                go_to_page("Aprender")
     with c2:
         module_card(
             "Visor de espectros",
             "Carga espectros de absorcion, emision o excitacion en solucion o solido y comparalos.",
-            "visor_calc", "Calcular",
-            "visor_info", "Aprender sobre espectros",
         )
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Calcular", key="visor_calc", use_container_width=True):
+                go_to_page("Visor de espectros")
+        with b2:
+            if st.button("Aprender", key="visor_info", use_container_width=True):
+                st.session_state["learn_topic"] = "Visor de espectros"
+                go_to_page("Aprender")
     with c3:
         module_card(
             "Rendimiento cuantico",
             "Calcula rendimiento cuantico relativo usando muestra, referencia, absorbancia y area.",
-            "rendimiento_calc", "Calcular",
-            "rendimiento_info", "Aprender sobre Phi",
         )
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Calcular", key="rendimiento_calc", use_container_width=True):
+                go_to_page("Rendimiento cuantico")
+        with b2:
+            if st.button("Aprender", key="rendimiento_info", use_container_width=True):
+                st.session_state["learn_topic"] = "Rendimiento cuantico"
+                go_to_page("Aprender")
 
     st.stop()
 
