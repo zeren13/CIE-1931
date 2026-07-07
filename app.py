@@ -39,7 +39,7 @@ except Exception:
 
 # ----------------- Config -----------------
 st.set_page_config(layout="wide", page_title="SpectraLab Toolkit")
-matplotlib.rcParams.update({'font.size': 18})
+matplotlib.rcParams.update({'font.size': 12})
 DIALOG_DECORATOR = getattr(st, 'dialog', None) or getattr(st, 'experimental_dialog', None)
 HAS_DIALOG = callable(DIALOG_DECORATOR)
 
@@ -573,26 +573,27 @@ else:
     st.sidebar.markdown(
         """
         <style>
-        .tool-wrap { padding: 2px 0 8px 0; }
-        .tool-wrap .tool-label {
+        div[class*="st-key-toolbox_"] {
+            padding: 2px 0 4px 0;
+        }
+        div[class*="st-key-toolbox_"] .tool-label {
             padding: .35rem .6rem;
             border-radius: 6px;
             font-size: .95rem;
             color: #31333F;
             transition: background-color .15s ease, color .15s ease;
         }
-        .tool-wrap:hover .tool-label {
+        div[class*="st-key-toolbox_"]:hover .tool-label {
             background-color: #fca5a5;
             color: #7f1d1d;
         }
-        .tool-actions {
+        div[class*="st-key-toolbox_"] div[data-testid="stHorizontalBlock"] {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
-            margin-top: 4px;
             transition: opacity .2s ease;
         }
-        .tool-wrap:hover .tool-actions {
+        div[class*="st-key-toolbox_"]:hover div[data-testid="stHorizontalBlock"] {
             opacity: 1;
             visibility: visible;
             pointer-events: auto;
@@ -609,19 +610,22 @@ else:
         ("Rendimiento cuantico", "rendimiento", "Rendimiento cuantico"),
     ]
     for _tool_name, _tool_key, _learn_topic in _tools:
-        st.sidebar.markdown(
-            f'<div class="tool-wrap"><div class="tool-label">{_tool_name}</div><div class="tool-actions">',
-            unsafe_allow_html=True,
-        )
-        _b1, _b2 = st.sidebar.columns(2)
-        with _b1:
-            if st.button("Calcular", key=f"{_tool_key}_calc", use_container_width=True):
-                go_to_page(_tool_name)
-        with _b2:
-            if st.button("Aprender", key=f"{_tool_key}_learn", use_container_width=True):
-                st.session_state["learn_topic"] = _learn_topic
-                go_to_page("Aprender")
-        st.sidebar.markdown("</div></div>", unsafe_allow_html=True)
+        try:
+            _tool_box = st.sidebar.container(key=f"toolbox_{_tool_key}")
+        except TypeError:
+            # Streamlit antiguo sin soporte para container(key=...): pierde el
+            # hover-reveal pero sigue funcionando como lista simple.
+            _tool_box = st.sidebar.container()
+        with _tool_box:
+            st.markdown(f'<div class="tool-label">{_tool_name}</div>', unsafe_allow_html=True)
+            _b1, _b2 = st.columns(2)
+            with _b1:
+                if st.button("Calcular", key=f"{_tool_key}_calc", use_container_width=True):
+                    go_to_page(_tool_name)
+            with _b2:
+                if st.button("Aprender", key=f"{_tool_key}_learn", use_container_width=True):
+                    st.session_state["learn_topic"] = _learn_topic
+                    go_to_page("Aprender")
 
 # ============================================================
 # Pagina: Inicio
