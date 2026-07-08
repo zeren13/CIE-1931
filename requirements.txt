@@ -1,7 +1,9 @@
-streamlit
-colour-science
+streamlit>=1.32
 numpy
 pandas
 matplotlib
-openpyxl
+colour-science
 scipy
+openpyxl
+python-docx
+reportlab
