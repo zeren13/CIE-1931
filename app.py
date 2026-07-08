@@ -1549,35 +1549,30 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     # Seccion: rendimiento cuantico RELATIVO
     # ======================================================
     with tab_rel:
-        top1, top2 = st.columns([3, 1])
-        with top1:
-            st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
-        with top2:
-            if st.button("\u00bfPor que esta formula? \u2192 Aprender", key="rel_learn_link", use_container_width=True):
-                st.session_state["learn_topic"] = "Rendimiento cuantico"
-                go_to_page("Aprender")
         st.write(
             "Usa areas integradas de emision, absorbancias a la longitud de onda de excitacion "
             "e indices de refraccion. Mantener absorbancias bajas ayuda a reducir errores por filtro interno."
         )
 
-        if st.button("Cargar ejemplo (sulfato de quinina como referencia)", key="rel_load_example"):
-            st.session_state["rel_sample_area_mode"] = "Manual"
-            st.session_state["rel_sample_area_manual"] = 0.72
-            st.session_state["rel_sample_abs_mode"] = "Manual"
-            st.session_state["rel_sample_abs_manual"] = 0.045
-            st.session_state["rel_sample_n"] = 1.333
-            st.session_state["rel_ref_phi"] = 0.546
-            st.session_state["rel_ref_area_mode"] = "Manual"
-            st.session_state["rel_ref_area_manual"] = 1.0
-            st.session_state["rel_ref_abs_mode"] = "Manual"
-            st.session_state["rel_ref_abs_manual"] = 0.045
-            st.session_state["rel_ref_n"] = 1.333
-            st.rerun()
+        col_in, col_out = st.columns([1, 1.2], gap="large")
 
-        q1, q2 = st.columns(2)
-        with q1:
-            st.markdown("### Muestra")
+        with col_in:
+            st.markdown("#### Datos de entrada")
+            if st.button("Cargar ejemplo (sulfato de quinina como referencia)", key="rel_load_example", use_container_width=True):
+                st.session_state["rel_sample_area_mode"] = "Manual"
+                st.session_state["rel_sample_area_manual"] = 0.72
+                st.session_state["rel_sample_abs_mode"] = "Manual"
+                st.session_state["rel_sample_abs_manual"] = 0.045
+                st.session_state["rel_sample_n"] = 1.333
+                st.session_state["rel_ref_phi"] = 0.546
+                st.session_state["rel_ref_area_mode"] = "Manual"
+                st.session_state["rel_ref_area_manual"] = 1.0
+                st.session_state["rel_ref_abs_mode"] = "Manual"
+                st.session_state["rel_ref_abs_manual"] = 0.045
+                st.session_state["rel_ref_n"] = 1.333
+                st.rerun()
+
+            st.markdown("##### Muestra")
             sample_area = area_input(
                 "Area integrada de emision (muestra)", "rel_sample_area", default_value=1.0,
                 help_text="Ix: area bajo la curva del espectro de emision de tu muestra.",
@@ -1590,8 +1585,8 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
                 "Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n",
                 help="nx: indice de refraccion del solvente de la muestra (agua \u2248 1.333, etanol \u2248 1.36).",
             )
-        with q2:
-            st.markdown("### Referencia")
+
+            st.markdown("##### Referencia")
             ref_phi = st.number_input(
                 "Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi",
                 help="\u03a6ref: rendimiento cuantico ya conocido de la referencia, tomado de la literatura.",
@@ -1616,127 +1611,124 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         }
         phi, rel_steps = _relative_qy_steps(rel_data)
 
-        st.markdown("### Desarrollo paso a paso")
-        ratio_area = sample_area / ref_area
-        ratio_abs = ref_abs / sample_abs
-        ratio_n2 = (sample_n ** 2) / (ref_n ** 2)
+        with col_out:
+            st.markdown("#### Formula y desarrollo")
+            st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
 
-        st.markdown("**Paso 1.** Razon de areas de emision integradas:")
-        if show_explanations:
-            st.caption(rel_steps[1][2])
-        st.latex(fr"\frac{{I_x}}{{I_{{ref}}}} = \frac{{{sample_area:.4g}}}{{{ref_area:.4g}}} = {ratio_area:.4g}")
+            ratio_area = sample_area / ref_area
+            ratio_abs = ref_abs / sample_abs
+            ratio_n2 = (sample_n ** 2) / (ref_n ** 2)
 
-        st.markdown("**Paso 2.** Razon de absorbancias a la longitud de onda de excitacion:")
-        if show_explanations:
-            st.caption(rel_steps[2][2])
-        st.latex(fr"\frac{{A_{{ref}}}}{{A_x}} = \frac{{{ref_abs:.4g}}}{{{sample_abs:.4g}}} = {ratio_abs:.4g}")
+            st.markdown("**Paso 1.** Razon de areas de emision integradas:")
+            if show_explanations:
+                st.caption(rel_steps[1][2])
+            st.latex(fr"\frac{{I_x}}{{I_{{ref}}}} = \frac{{{sample_area:.4g}}}{{{ref_area:.4g}}} = {ratio_area:.4g}")
 
-        st.markdown("**Paso 3.** Razon de indices de refraccion al cuadrado:")
-        if show_explanations:
-            st.caption(rel_steps[3][2])
-        st.latex(fr"\frac{{n_x^2}}{{n_{{ref}}^2}} = \frac{{{sample_n:.4g}^2}}{{{ref_n:.4g}^2}} = {ratio_n2:.4g}")
+            st.markdown("**Paso 2.** Razon de absorbancias a la longitud de onda de excitacion:")
+            if show_explanations:
+                st.caption(rel_steps[2][2])
+            st.latex(fr"\frac{{A_{{ref}}}}{{A_x}} = \frac{{{ref_abs:.4g}}}{{{sample_abs:.4g}}} = {ratio_abs:.4g}")
 
-        st.markdown("**Paso 4.** Sustituir y multiplicar todo junto con \u03a6ref:")
-        if show_explanations:
-            st.caption(rel_steps[4][2])
-        st.latex(
-            fr"\Phi_x = {ref_phi:.4g}\left({ratio_area:.4g}\right)\left({ratio_abs:.4g}\right)\left({ratio_n2:.4g}\right) = {phi:.4g}"
-        )
-        if show_explanations:
-            st.caption(rel_steps[5][2])
+            st.markdown("**Paso 3.** Razon de indices de refraccion al cuadrado:")
+            if show_explanations:
+                st.caption(rel_steps[3][2])
+            st.latex(fr"\frac{{n_x^2}}{{n_{{ref}}^2}} = \frac{{{sample_n:.4g}^2}}{{{ref_n:.4g}^2}} = {ratio_n2:.4g}")
 
-        st.metric("Rendimiento cuantico relativo de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
-
-        if phi > 1:
-            st.warning(
-                "El resultado es mayor que 1, lo cual no es fisicamente posible (nunca se puede emitir "
-                "mas fotones de los que se absorben). Causas tipicas:\n"
-                "- **Efecto de filtro interno o reabsorcion**: absorbancias demasiado altas (>0.1) distorsionan el area de emision.\n"
-                "- **Rango de integracion inconsistente**: revisa que el area de muestra y referencia cubran el mismo rango espectral.\n"
-                "- **\u03a6ref incorrecto**: verifica el valor de referencia contra la literatura, incluyendo el solvente y la longitud de onda usados.\n"
-                "- **Linea base sin corregir**: una linea base desplazada infla el area integrada."
+            st.markdown("**Paso 4.** Sustituir y multiplicar todo junto con \u03a6ref:")
+            if show_explanations:
+                st.caption(rel_steps[4][2])
+            st.latex(
+                fr"\Phi_x = {ref_phi:.4g}\left({ratio_area:.4g}\right)\left({ratio_abs:.4g}\right)\left({ratio_n2:.4g}\right) = {phi:.4g}"
             )
-        elif show_explanations:
-            if phi < 0.1:
-                nivel = "bajo"
-                comentario = "tipico de emisores con mucha desactivacion no radiativa (perdida de energia como calor)."
-            elif phi < 0.5:
-                nivel = "moderado"
-                comentario = "un rango comun para muchos complejos organicos y de lantanidos con ligandos organicos."
-            else:
-                nivel = "alto"
-                comentario = "tipico de buenos fluoroforos organicos (p. ej. rodaminas, fluoresceina)."
-            st.caption(
-                f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
-                "no una regla estricta; el valor esperado depende mucho del sistema quimico especifico."
-            )
+            if show_explanations:
+                st.caption(rel_steps[5][2])
 
-        st.markdown("#### Exportar resultado")
-        col_pdf, col_docx = st.columns(2)
-        with col_pdf:
-            if _HAS_REPORTLAB:
-                try:
-                    pdf_bytes = build_relative_qy_pdf(rel_data)
-                    st.download_button("Descargar PDF", data=pdf_bytes, file_name="rendimiento_cuantico_relativo.pdf",
-                                       mime="application/pdf", use_container_width=True, key="rel_pdf")
-                except Exception as e:
-                    st.error(f"No se pudo generar el PDF: {e}")
-            else:
-                st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
-        with col_docx:
-            if _HAS_DOCX:
-                try:
-                    docx_bytes = build_relative_qy_docx(rel_data)
-                    st.download_button("Descargar Word (.docx)", data=docx_bytes, file_name="rendimiento_cuantico_relativo.docx",
-                                       mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                       use_container_width=True, key="rel_docx")
-                except Exception as e:
-                    st.error(f"No se pudo generar el documento Word: {e}")
-            else:
-                st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+            st.metric("Rendimiento cuantico relativo de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
+
+            if phi > 1:
+                st.warning(
+                    "El resultado es mayor que 1, lo cual no es fisicamente posible (nunca se puede emitir "
+                    "mas fotones de los que se absorben). Causas tipicas:\n"
+                    "- **Efecto de filtro interno o reabsorcion**: absorbancias demasiado altas (>0.1) distorsionan el area de emision.\n"
+                    "- **Rango de integracion inconsistente**: revisa que el area de muestra y referencia cubran el mismo rango espectral.\n"
+                    "- **\u03a6ref incorrecto**: verifica el valor de referencia contra la literatura, incluyendo el solvente y la longitud de onda usados.\n"
+                    "- **Linea base sin corregir**: una linea base desplazada infla el area integrada."
+                )
+            elif show_explanations:
+                if phi < 0.1:
+                    nivel = "bajo"
+                    comentario = "tipico de emisores con mucha desactivacion no radiativa (perdida de energia como calor)."
+                elif phi < 0.5:
+                    nivel = "moderado"
+                    comentario = "un rango comun para muchos complejos organicos y de lantanidos con ligandos organicos."
+                else:
+                    nivel = "alto"
+                    comentario = "tipico de buenos fluoroforos organicos (p. ej. rodaminas, fluoresceina)."
+                st.caption(
+                    f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
+                    "no una regla estricta; el valor esperado depende mucho del sistema quimico especifico."
+                )
+
+            st.markdown("#### Exportar resultado")
+            col_pdf, col_docx = st.columns(2)
+            with col_pdf:
+                if _HAS_REPORTLAB:
+                    try:
+                        pdf_bytes = build_relative_qy_pdf(rel_data)
+                        st.download_button("Descargar PDF", data=pdf_bytes, file_name="rendimiento_cuantico_relativo.pdf",
+                                           mime="application/pdf", use_container_width=True, key="rel_pdf")
+                    except Exception as e:
+                        st.error(f"No se pudo generar el PDF: {e}")
+                else:
+                    st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
+            with col_docx:
+                if _HAS_DOCX:
+                    try:
+                        docx_bytes = build_relative_qy_docx(rel_data)
+                        st.download_button("Descargar Word (.docx)", data=docx_bytes, file_name="rendimiento_cuantico_relativo.docx",
+                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                           use_container_width=True, key="rel_docx")
+                    except Exception as e:
+                        st.error(f"No se pudo generar el documento Word: {e}")
+                else:
+                    st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
 
     # ======================================================
     # Seccion: rendimiento cuantico ABSOLUTO
     # ======================================================
     with tab_abs:
-        topa1, topa2 = st.columns([3, 1])
-        with topa1:
-            st.write(
-                "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
-                "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
-            )
-        with topa2:
-            if st.button("\u00bfPor que este metodo? \u2192 Aprender", key="abs_learn_link", use_container_width=True):
-                st.session_state["learn_topic"] = "Rendimiento cuantico"
-                go_to_page("Aprender")
-        st.latex(r"A = 1 - \frac{L_c}{L_a}")
-        st.latex(r"\Phi_{abs} = \frac{E_c - (1-A)\,E_a}{A\,L_a}")
+        st.write(
+            "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
+            "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
+        )
         st.caption(
             "La = area de excitacion dispersada (referencia/blanco, sin excitar directamente la muestra). "
             "Lc = area de excitacion dispersada con la muestra en el haz directo. "
             "Ea = area de emision con excitacion indirecta. Ec = area de emision con excitacion directa."
         )
 
-        if st.button("Cargar ejemplo", key="abs_load_example"):
-            st.session_state["abs_La_mode"] = "Manual"
-            st.session_state["abs_La_manual"] = 1.0
-            st.session_state["abs_Lc_mode"] = "Manual"
-            st.session_state["abs_Lc_manual"] = 0.35
-            st.session_state["abs_Ea_mode"] = "Manual"
-            st.session_state["abs_Ea_manual"] = 0.05
-            st.session_state["abs_Ec_mode"] = "Manual"
-            st.session_state["abs_Ec_manual"] = 0.42
-            st.rerun()
+        col_in2, col_out2 = st.columns([1, 1.2], gap="large")
 
-        a1, a2 = st.columns(2)
-        with a1:
-            st.markdown("### Excitacion")
+        with col_in2:
+            st.markdown("#### Datos de entrada")
+            if st.button("Cargar ejemplo", key="abs_load_example", use_container_width=True):
+                st.session_state["abs_La_mode"] = "Manual"
+                st.session_state["abs_La_manual"] = 1.0
+                st.session_state["abs_Lc_mode"] = "Manual"
+                st.session_state["abs_Lc_manual"] = 0.35
+                st.session_state["abs_Ea_mode"] = "Manual"
+                st.session_state["abs_Ea_manual"] = 0.05
+                st.session_state["abs_Ec_mode"] = "Manual"
+                st.session_state["abs_Ec_manual"] = 0.42
+                st.rerun()
+
+            st.markdown("##### Excitacion")
             L_a = area_input("La \u2014 referencia/blanco", "abs_La", default_value=1.0,
                              help_text="Area del pico de excitacion dispersada, midiendo solo el blanco o la referencia.")
             L_c = area_input("Lc \u2014 con la muestra", "abs_Lc", default_value=0.5,
                              help_text="Area del mismo pico de excitacion, ahora con la muestra puesta en el haz directo.")
-        with a2:
-            st.markdown("### Emision")
+
+            st.markdown("##### Emision")
             E_a = area_input("Ea \u2014 excitacion indirecta", "abs_Ea", default_value=0.1,
                              help_text="Area de emision cuando la muestra se excita solo indirectamente (luz dispersada dentro de la esfera).")
             E_c = area_input("Ec \u2014 excitacion directa", "abs_Ec", default_value=0.6,
@@ -1747,88 +1739,91 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
             "L_a": L_a, "L_c": L_c, "E_a": E_a, "E_c": E_c,
         }
 
-        if L_c > L_a:
-            st.error("Lc no puede ser mayor que La (la muestra no puede dispersar/transmitir mas luz de la que llega).")
-        else:
-            phi_abs, A, abs_steps = _absolute_qy_steps(abs_data)
+        with col_out2:
+            st.markdown("#### Formula y desarrollo")
+            st.latex(r"A = 1 - \frac{L_c}{L_a}")
+            st.latex(r"\Phi_{abs} = \frac{E_c - (1-A)\,E_a}{A\,L_a}")
 
-            st.markdown("### Desarrollo paso a paso")
-            lc_la_ratio = L_c / L_a
+            if L_c > L_a:
+                st.error("Lc no puede ser mayor que La (la muestra no puede dispersar/transmitir mas luz de la que llega).")
+            else:
+                phi_abs, A, abs_steps = _absolute_qy_steps(abs_data)
+                lc_la_ratio = L_c / L_a
 
-            st.markdown("**Paso 1.** Fraccion de luz absorbida por la muestra:")
-            if show_explanations:
-                st.caption(abs_steps[0][2])
-            st.latex(fr"A = 1 - \frac{{L_c}}{{L_a}} = 1 - \frac{{{L_c:.4g}}}{{{L_a:.4g}}} = 1 - {lc_la_ratio:.4g} = {A:.4g}")
+                st.markdown("**Paso 1.** Fraccion de luz absorbida por la muestra:")
+                if show_explanations:
+                    st.caption(abs_steps[0][2])
+                st.latex(fr"A = 1 - \frac{{L_c}}{{L_a}} = 1 - \frac{{{L_c:.4g}}}{{{L_a:.4g}}} = 1 - {lc_la_ratio:.4g} = {A:.4g}")
 
-            st.markdown("**Paso 2.** Termino de emision indirecta corregido:")
-            if show_explanations:
-                st.caption(abs_steps[2][2])
-            st.latex(fr"(1-A)\,E_a = (1 - {A:.4g})\times {E_a:.4g} = {(1 - A) * E_a:.4g}")
+                st.markdown("**Paso 2.** Termino de emision indirecta corregido:")
+                if show_explanations:
+                    st.caption(abs_steps[2][2])
+                st.latex(fr"(1-A)\,E_a = (1 - {A:.4g})\times {E_a:.4g} = {(1 - A) * E_a:.4g}")
 
-            st.markdown("**Paso 3.** Numerador (emision directa menos la indirecta corregida):")
-            if show_explanations:
-                st.caption(abs_steps[3][2])
-            st.latex(fr"E_c - (1-A)E_a = {E_c:.4g} - {(1 - A) * E_a:.4g} = {E_c - (1 - A) * E_a:.4g}")
+                st.markdown("**Paso 3.** Numerador (emision directa menos la indirecta corregida):")
+                if show_explanations:
+                    st.caption(abs_steps[3][2])
+                st.latex(fr"E_c - (1-A)E_a = {E_c:.4g} - {(1 - A) * E_a:.4g} = {E_c - (1 - A) * E_a:.4g}")
 
-            st.markdown("**Paso 4.** Denominador:")
-            if show_explanations:
-                st.caption(abs_steps[4][2])
-            st.latex(fr"A \times L_a = {A:.4g} \times {L_a:.4g} = {A * L_a:.4g}")
+                st.markdown("**Paso 4.** Denominador:")
+                if show_explanations:
+                    st.caption(abs_steps[4][2])
+                st.latex(fr"A \times L_a = {A:.4g} \times {L_a:.4g} = {A * L_a:.4g}")
 
-            st.markdown("**Paso 5.** Dividir para obtener el rendimiento cuantico absoluto:")
-            if show_explanations:
-                st.caption(abs_steps[5][2])
-            st.latex(
-                fr"\Phi_{{abs}} = \frac{{{E_c - (1 - A) * E_a:.4g}}}{{{A * L_a:.4g}}} = {phi_abs:.4g}"
-            )
-
-            st.metric("Rendimiento cuantico absoluto de la muestra", f"{phi_abs:.4f}", f"{phi_abs * 100:.2f}%")
-
-            if phi_abs > 1:
-                st.warning(
-                    "El resultado es mayor que 1, lo cual no es fisicamente posible. Causas tipicas:\n"
-                    "- **Mala separacion entre el pico de excitacion y el de emision** al integrar las areas.\n"
-                    "- **Geometria inconsistente** entre las mediciones de La/Lc y Ea/Ec (deben usar el mismo montaje).\n"
-                    "- **Muestra que dispersa mucha luz** (solidos/polvos), lo que distorsiona el pico de excitacion."
-                )
-            elif show_explanations:
-                if phi_abs < 0.1:
-                    nivel = "bajo"
-                    comentario = "tipico de emisores con mucha desactivacion no radiativa."
-                elif phi_abs < 0.5:
-                    nivel = "moderado"
-                    comentario = "un rango comun para complejos de lantanidos y materiales solidos luminiscentes."
-                else:
-                    nivel = "alto"
-                    comentario = "tipico de buenos emisores solidos o fosforos comerciales."
-                st.caption(
-                    f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
-                    "no una regla estricta."
+                st.markdown("**Paso 5.** Dividir para obtener el rendimiento cuantico absoluto:")
+                if show_explanations:
+                    st.caption(abs_steps[5][2])
+                st.latex(
+                    fr"\Phi_{{abs}} = \frac{{{E_c - (1 - A) * E_a:.4g}}}{{{A * L_a:.4g}}} = {phi_abs:.4g}"
                 )
 
-            st.markdown("#### Exportar resultado")
-            col_pdf2, col_docx2 = st.columns(2)
-            with col_pdf2:
-                if _HAS_REPORTLAB:
-                    try:
-                        pdf_bytes_abs = build_absolute_qy_pdf(abs_data)
-                        st.download_button("Descargar PDF", data=pdf_bytes_abs, file_name="rendimiento_cuantico_absoluto.pdf",
-                                           mime="application/pdf", use_container_width=True, key="abs_pdf")
-                    except Exception as e:
-                        st.error(f"No se pudo generar el PDF: {e}")
-                else:
-                    st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
-            with col_docx2:
-                if _HAS_DOCX:
-                    try:
-                        docx_bytes_abs = build_absolute_qy_docx(abs_data)
-                        st.download_button("Descargar Word (.docx)", data=docx_bytes_abs, file_name="rendimiento_cuantico_absoluto.docx",
-                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                           use_container_width=True, key="abs_docx")
-                    except Exception as e:
-                        st.error(f"No se pudo generar el documento Word: {e}")
-                else:
-                    st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+                st.metric("Rendimiento cuantico absoluto de la muestra", f"{phi_abs:.4f}", f"{phi_abs * 100:.2f}%")
+
+                if phi_abs > 1:
+                    st.warning(
+                        "El resultado es mayor que 1, lo cual no es fisicamente posible. Causas tipicas:\n"
+                        "- **Mala separacion entre el pico de excitacion y el de emision** al integrar las areas.\n"
+                        "- **Geometria inconsistente** entre las mediciones de La/Lc y Ea/Ec (deben usar el mismo montaje).\n"
+                        "- **Muestra que dispersa mucha luz** (solidos/polvos), lo que distorsiona el pico de excitacion."
+                    )
+                elif show_explanations:
+                    if phi_abs < 0.1:
+                        nivel = "bajo"
+                        comentario = "tipico de emisores con mucha desactivacion no radiativa."
+                    elif phi_abs < 0.5:
+                        nivel = "moderado"
+                        comentario = "un rango comun para complejos de lantanidos y materiales solidos luminiscentes."
+                    else:
+                        nivel = "alto"
+                        comentario = "tipico de buenos emisores solidos o fosforos comerciales."
+                    st.caption(
+                        f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
+                        "no una regla estricta."
+                    )
+
+                st.markdown("#### Exportar resultado")
+                col_pdf2, col_docx2 = st.columns(2)
+                with col_pdf2:
+                    if _HAS_REPORTLAB:
+                        try:
+                            pdf_bytes_abs = build_absolute_qy_pdf(abs_data)
+                            st.download_button("Descargar PDF", data=pdf_bytes_abs, file_name="rendimiento_cuantico_absoluto.pdf",
+                                               mime="application/pdf", use_container_width=True, key="abs_pdf")
+                        except Exception as e:
+                            st.error(f"No se pudo generar el PDF: {e}")
+                    else:
+                        st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
+                with col_docx2:
+                    if _HAS_DOCX:
+                        try:
+                            docx_bytes_abs = build_absolute_qy_docx(abs_data)
+                            st.download_button("Descargar Word (.docx)", data=docx_bytes_abs, file_name="rendimiento_cuantico_absoluto.docx",
+                                               mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                               use_container_width=True, key="abs_docx")
+                        except Exception as e:
+                            st.error(f"No se pudo generar el documento Word: {e}")
+                    else:
+                        st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
 
     st.stop()
 
