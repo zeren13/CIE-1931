@@ -613,7 +613,7 @@ else:
         }
         div[class*="st-key-toolbox_"] .tool-label {
             font-weight: 600;
-            font-size: .95rem;
+            font-size: 1.1rem;
             color: #31333F;
             transition: color .2s ease;
         }
@@ -622,25 +622,16 @@ else:
         }
         div[class*="st-key-toolbox_"] div[data-testid="stHorizontalBlock"] {
             margin-top: .5rem;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transition: opacity .2s ease;
-        }
-        div[class*="st-key-toolbox_"]:hover div[data-testid="stHorizontalBlock"] {
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto;
         }
         div[class*="st-key-toolbox_"] div[data-testid="stButton"] > button {
             border-radius: 7px;
+            font-size: 1rem;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.sidebar.header("Herramientas")
-    st.sidebar.caption("Pasa el cursor sobre un modulo para ver sus opciones.")
 
     _tools = [
         ("Analisis CIE 1931", "cie", "CIE 1931"),
