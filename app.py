@@ -438,26 +438,119 @@ def show_and_close(fig):
     plt.close(fig)
 
 
-def build_quantum_yield_docx(data: dict) -> bytes:
-    """Genera un reporte .docx con los datos, la formula y el resultado
-    del calculo de rendimiento cuantico relativo."""
-    doc = Document()
-
-    title = doc.add_heading("Rendimiento cuantico relativo", level=1)
-    for run in title.runs:
+def _docx_report_header(doc, title, timestamp, intro_text):
+    heading = doc.add_heading(title, level=1)
+    for run in heading.runs:
         run.font.color.rgb = RGBColor(0x7F, 0x1D, 0x1D)
+    doc.add_paragraph(f"Generado: {timestamp}")
+    doc.add_paragraph(intro_text)
 
-    doc.add_paragraph(f"Generado: {data['timestamp']}")
-    doc.add_paragraph(
+
+def _docx_add_step(doc, step_number, step_title, lines):
+    doc.add_heading(f"Paso {step_number}. {step_title}", level=2)
+    for line in lines:
+        p = doc.add_paragraph()
+        p.add_run(line).italic = True
+
+
+def _docx_add_result(doc, symbol, value, warn_if_over_one=True):
+    doc.add_heading("Resultado", level=2)
+    result_p = doc.add_paragraph()
+    result_run = result_p.add_run(f"{symbol} = {value:.4f}  ({value * 100:.2f} %)")
+    result_run.bold = True
+    result_run.font.size = Pt(14)
+    if warn_if_over_one and value > 1:
+        warn = doc.add_paragraph()
+        warn.add_run(
+            "Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias/intensidades, "
+            "referencia o correcciones experimentales."
+        ).italic = True
+
+
+def _pdf_header_story(styles, title, timestamp, intro_text):
+    title_style = styles["Title"]
+    title_style.textColor = rl_colors.HexColor("#7F1D1D")
+    return [
+        Paragraph(title, title_style),
+        Spacer(1, 6),
+        Paragraph(f"Generado: {timestamp}", styles["Normal"]),
+        Spacer(1, 10),
+        Paragraph(intro_text, styles["Normal"]),
+        Spacer(1, 14),
+    ]
+
+
+def _pdf_step_story(styles, step_number, step_title, lines):
+    story = [Paragraph(f"<b>Paso {step_number}. {step_title}</b>", styles["Heading2"])]
+    for line in lines:
+        story.append(Paragraph(f"<i>{line}</i>", styles["Normal"]))
+        story.append(Spacer(1, 4))
+    story.append(Spacer(1, 10))
+    return story
+
+
+def _pdf_result_story(styles, symbol, value, warn_if_over_one=True):
+    story = [
+        Paragraph("<b>Resultado</b>", styles["Heading2"]),
+        Paragraph(
+            f"<font size=14><b>{symbol} = {value:.4f}  ({value * 100:.2f} %)</b></font>",
+            styles["Normal"],
+        ),
+    ]
+    if warn_if_over_one and value > 1:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(
+            "<i>Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias/intensidades, "
+            "referencia o correcciones experimentales.</i>",
+            styles["Normal"],
+        ))
+    return story
+
+
+# ---------- Rendimiento cuantico RELATIVO ----------
+
+def _relative_qy_steps(data):
+    """Calcula las razones intermedias y arma el texto de cada paso,
+    compartido entre el exportador a Word y a PDF."""
+    ratio_area = data["sample_area"] / data["ref_area"]
+    ratio_abs = data["ref_abs"] / data["sample_abs"]
+    ratio_n2 = (data["sample_n"] ** 2) / (data["ref_n"] ** 2)
+    phi = data["ref_phi"] * ratio_area * ratio_abs * ratio_n2
+
+    steps = [
+        (1, "Formula general del metodo relativo", [
+            "\u03a6x = \u03a6ref \u00d7 (Ix / Iref) \u00d7 (Aref / Ax) \u00d7 (nx\u00b2 / nref\u00b2)",
+        ]),
+        (2, "Razon de areas de emision integradas (Ix / Iref)", [
+            f"Ix / Iref = {data['sample_area']:.6g} / {data['ref_area']:.6g} = {ratio_area:.6g}",
+        ]),
+        (3, "Razon de absorbancias a la longitud de onda de excitacion (Aref / Ax)", [
+            f"Aref / Ax = {data['ref_abs']:.6g} / {data['sample_abs']:.6g} = {ratio_abs:.6g}",
+        ]),
+        (4, "Razon de indices de refraccion al cuadrado (nx\u00b2 / nref\u00b2)", [
+            f"nx\u00b2 / nref\u00b2 = {data['sample_n']:.6g}\u00b2 / {data['ref_n']:.6g}\u00b2 "
+            f"= {data['sample_n'] ** 2:.6g} / {data['ref_n'] ** 2:.6g} = {ratio_n2:.6g}",
+        ]),
+        (5, "Sustituir todas las razones en la formula", [
+            f"\u03a6x = {data['ref_phi']:.6g} \u00d7 {ratio_area:.6g} \u00d7 {ratio_abs:.6g} \u00d7 {ratio_n2:.6g}",
+        ]),
+        (6, "Multiplicar y obtener el resultado", [
+            f"\u03a6x = {phi:.6g}",
+        ]),
+    ]
+    return phi, steps
+
+
+def build_relative_qy_docx(data: dict) -> bytes:
+    """Genera un reporte .docx con el desarrollo matematico paso a paso
+    del rendimiento cuantico relativo."""
+    phi, steps = _relative_qy_steps(data)
+    doc = Document()
+    _docx_report_header(
+        doc, "Rendimiento cuantico relativo", data["timestamp"],
         "Metodo relativo: compara el area de emision integrada de la muestra con la de "
-        "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion."
+        "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion.",
     )
-
-    doc.add_heading("Formula", level=2)
-    p = doc.add_paragraph()
-    p.add_run(
-        "\u03a6x = \u03a6ref \u00d7 (Ix / Iref) \u00d7 (Aref / Ax) \u00d7 (nx\u00b2 / nref\u00b2)"
-    ).italic = True
 
     doc.add_heading("Datos de entrada", level=2)
     table = doc.add_table(rows=1, cols=3)
@@ -467,8 +560,8 @@ def build_quantum_yield_docx(data: dict) -> bytes:
     hdr[1].text = "Muestra"
     hdr[2].text = "Referencia"
     rows = [
-        ("Area integrada", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"),
-        ("Absorbancia", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"),
+        ("Area integrada de emision", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"),
+        ("Absorbancia (exc.)", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"),
         ("Indice de refraccion", f"{data['sample_n']:.6g}", f"{data['ref_n']:.6g}"),
         ("Rendimiento cuantico (Phi)", "-", f"{data['ref_phi']:.6g}"),
     ]
@@ -478,20 +571,11 @@ def build_quantum_yield_docx(data: dict) -> bytes:
         cells[1].text = sample_val
         cells[2].text = ref_val
 
-    doc.add_heading("Resultado", level=2)
-    result_p = doc.add_paragraph()
-    result_run = result_p.add_run(
-        f"\u03a6x = {data['phi']:.4f}  ({data['phi'] * 100:.2f} %)"
-    )
-    result_run.bold = True
-    result_run.font.size = Pt(14)
+    doc.add_heading("Desarrollo matematico", level=2)
+    for step_number, step_title, lines in steps:
+        _docx_add_step(doc, step_number, step_title, lines)
 
-    if data["phi"] > 1:
-        warn = doc.add_paragraph()
-        warn.add_run(
-            "Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias, "
-            "referencia o correcciones experimentales."
-        ).italic = True
+    _docx_add_result(doc, "\u03a6x", phi)
 
     bio = io.BytesIO()
     doc.save(bio)
@@ -499,39 +583,25 @@ def build_quantum_yield_docx(data: dict) -> bytes:
     return bio.getvalue()
 
 
-def build_quantum_yield_pdf(data: dict) -> bytes:
-    """Genera un reporte .pdf con los datos, la formula y el resultado
-    del calculo de rendimiento cuantico relativo."""
+def build_relative_qy_pdf(data: dict) -> bytes:
+    """Genera un reporte .pdf con el desarrollo matematico paso a paso
+    del rendimiento cuantico relativo."""
+    phi, steps = _relative_qy_steps(data)
     bio = io.BytesIO()
     doc = SimpleDocTemplate(bio, pagesize=letter, topMargin=0.8 * rl_inch, bottomMargin=0.8 * rl_inch)
     styles = getSampleStyleSheet()
-    title_style = styles["Title"]
-    title_style.textColor = rl_colors.HexColor("#7F1D1D")
 
-    story = [
-        Paragraph("Rendimiento cuantico relativo", title_style),
-        Spacer(1, 6),
-        Paragraph(f"Generado: {data['timestamp']}", styles["Normal"]),
-        Spacer(1, 10),
-        Paragraph(
-            "Metodo relativo: compara el area de emision integrada de la muestra con la de "
-            "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion.",
-            styles["Normal"],
-        ),
-        Spacer(1, 14),
-        Paragraph("<b>Formula</b>", styles["Heading2"]),
-        Paragraph(
-            "\u03a6x = \u03a6ref &times; (Ix / Iref) &times; (Aref / Ax) &times; (nx&sup2; / nref&sup2;)",
-            styles["Normal"],
-        ),
-        Spacer(1, 14),
-        Paragraph("<b>Datos de entrada</b>", styles["Heading2"]),
-    ]
+    story = _pdf_header_story(
+        styles, "Rendimiento cuantico relativo", data["timestamp"],
+        "Metodo relativo: compara el area de emision integrada de la muestra con la de "
+        "una referencia de rendimiento cuantico conocido, a la misma longitud de onda de excitacion.",
+    )
 
+    story.append(Paragraph("<b>Datos de entrada</b>", styles["Heading2"]))
     table_data = [
         ["Parametro", "Muestra", "Referencia"],
-        ["Area integrada", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"],
-        ["Absorbancia", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"],
+        ["Area integrada de emision", f"{data['sample_area']:.6g}", f"{data['ref_area']:.6g}"],
+        ["Absorbancia (exc.)", f"{data['sample_abs']:.6g}", f"{data['ref_abs']:.6g}"],
         ["Indice de refraccion", f"{data['sample_n']:.6g}", f"{data['ref_n']:.6g}"],
         ["Rendimiento cuantico (Phi)", "-", f"{data['ref_phi']:.6g}"],
     ]
@@ -545,19 +615,144 @@ def build_quantum_yield_pdf(data: dict) -> bytes:
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#F9FAFB")]),
     ]))
     story.append(tbl)
-    story.append(Spacer(1, 18))
-    story.append(Paragraph("<b>Resultado</b>", styles["Heading2"]))
-    story.append(Paragraph(
-        f"<font size=14><b>&Phi;x = {data['phi']:.4f}  ({data['phi'] * 100:.2f} %)</b></font>",
-        styles["Normal"],
-    ))
-    if data["phi"] > 1:
-        story.append(Spacer(1, 10))
-        story.append(Paragraph(
-            "<i>Advertencia: el resultado es mayor que 1. Revisa areas, absorbancias, "
-            "referencia o correcciones experimentales.</i>",
-            styles["Normal"],
-        ))
+    story.append(Spacer(1, 16))
+
+    story.append(Paragraph("<b>Desarrollo matematico</b>", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    for step_number, step_title, lines in steps:
+        story.extend(_pdf_step_story(styles, step_number, step_title, lines))
+
+    story.extend(_pdf_result_story(styles, "\u03a6x", phi))
+
+    doc.build(story)
+    bio.seek(0)
+    return bio.getvalue()
+
+
+# ---------- Rendimiento cuantico ABSOLUTO (metodo de esfera integradora) ----------
+
+def _absolute_qy_steps(data):
+    """Metodo de de Mello, Wittmann y Friend (1997) para rendimiento cuantico
+    absoluto por esfera integradora. Calcula pasos intermedios y arma el
+    texto de cada paso, compartido entre el exportador a Word y a PDF."""
+    La, Lc = data["L_a"], data["L_c"]
+    Ea, Ec = data["E_a"], data["E_c"]
+
+    lc_la_ratio = Lc / La
+    A = 1 - lc_la_ratio
+    one_minus_A_times_Ea = (1 - A) * Ea
+    numerator = Ec - one_minus_A_times_Ea
+    denominator = A * La
+    phi_abs = numerator / denominator if denominator != 0 else float("nan")
+
+    steps = [
+        (1, "Fraccion de luz absorbida (A)", [
+            "A = 1 \u2212 (Lc / La)",
+            f"Lc / La = {Lc:.6g} / {La:.6g} = {lc_la_ratio:.6g}",
+            f"A = 1 \u2212 {lc_la_ratio:.6g} = {A:.6g}",
+        ]),
+        (2, "Formula general del rendimiento cuantico absoluto", [
+            "\u03a6abs = (Ec \u2212 (1 \u2212 A)\u00b7Ea) / (A\u00b7La)",
+        ]),
+        (3, "Termino de emision indirecta corregido: (1 \u2212 A)\u00b7Ea", [
+            f"(1 \u2212 A) = 1 \u2212 {A:.6g} = {1 - A:.6g}",
+            f"(1 \u2212 A)\u00b7Ea = {1 - A:.6g} \u00d7 {Ea:.6g} = {one_minus_A_times_Ea:.6g}",
+        ]),
+        (4, "Numerador: Ec \u2212 (1 \u2212 A)\u00b7Ea", [
+            f"Numerador = {Ec:.6g} \u2212 {one_minus_A_times_Ea:.6g} = {numerator:.6g}",
+        ]),
+        (5, "Denominador: A\u00b7La", [
+            f"Denominador = {A:.6g} \u00d7 {La:.6g} = {denominator:.6g}",
+        ]),
+        (6, "Dividir numerador entre denominador", [
+            f"\u03a6abs = {numerator:.6g} / {denominator:.6g} = {phi_abs:.6g}",
+        ]),
+    ]
+    return phi_abs, A, steps
+
+
+def build_absolute_qy_docx(data: dict) -> bytes:
+    """Genera un reporte .docx con el desarrollo matematico paso a paso
+    del rendimiento cuantico absoluto (metodo de esfera integradora)."""
+    phi_abs, A, steps = _absolute_qy_steps(data)
+    doc = Document()
+    _docx_report_header(
+        doc, "Rendimiento cuantico absoluto", data["timestamp"],
+        "Metodo absoluto (de Mello, Wittmann y Friend, 1997) con esfera integradora: usa las "
+        "areas de excitacion dispersada y de emision, medidas con y sin excitacion directa de "
+        "la muestra, para obtener el rendimiento cuantico sin necesitar una referencia externa."
+    )
+
+    doc.add_heading("Datos de entrada", level=2)
+    table = doc.add_table(rows=1, cols=2)
+    table.style = "Light Grid Accent 1"
+    hdr = table.rows[0].cells
+    hdr[0].text = "Parametro"
+    hdr[1].text = "Valor (area integrada)"
+    rows = [
+        ("La \u2014 excitacion, referencia/blanco", f"{data['L_a']:.6g}"),
+        ("Lc \u2014 excitacion, con la muestra", f"{data['L_c']:.6g}"),
+        ("Ea \u2014 emision, excitacion indirecta", f"{data['E_a']:.6g}"),
+        ("Ec \u2014 emision, excitacion directa", f"{data['E_c']:.6g}"),
+    ]
+    for label, val in rows:
+        cells = table.add_row().cells
+        cells[0].text = label
+        cells[1].text = val
+
+    doc.add_heading("Desarrollo matematico", level=2)
+    for step_number, step_title, lines in steps:
+        _docx_add_step(doc, step_number, step_title, lines)
+
+    _docx_add_result(doc, "\u03a6abs", phi_abs)
+
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def build_absolute_qy_pdf(data: dict) -> bytes:
+    """Genera un reporte .pdf con el desarrollo matematico paso a paso
+    del rendimiento cuantico absoluto (metodo de esfera integradora)."""
+    phi_abs, A, steps = _absolute_qy_steps(data)
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(bio, pagesize=letter, topMargin=0.8 * rl_inch, bottomMargin=0.8 * rl_inch)
+    styles = getSampleStyleSheet()
+
+    story = _pdf_header_story(
+        styles, "Rendimiento cuantico absoluto", data["timestamp"],
+        "Metodo absoluto (de Mello, Wittmann y Friend, 1997) con esfera integradora: usa las "
+        "areas de excitacion dispersada y de emision, medidas con y sin excitacion directa de "
+        "la muestra, para obtener el rendimiento cuantico sin necesitar una referencia externa."
+    )
+
+    story.append(Paragraph("<b>Datos de entrada</b>", styles["Heading2"]))
+    table_data = [
+        ["Parametro", "Valor (area integrada)"],
+        ["La \u2014 excitacion, referencia/blanco", f"{data['L_a']:.6g}"],
+        ["Lc \u2014 excitacion, con la muestra", f"{data['L_c']:.6g}"],
+        ["Ea \u2014 emision, excitacion indirecta", f"{data['E_a']:.6g}"],
+        ["Ec \u2014 emision, excitacion directa", f"{data['E_c']:.6g}"],
+    ]
+    tbl = Table(table_data, colWidths=[3.2 * rl_inch, 2.4 * rl_inch])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#FEE2E2")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.HexColor("#7F1D1D")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#E5E7EB")),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#F9FAFB")]),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 16))
+
+    story.append(Paragraph("<b>Desarrollo matematico</b>", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    for step_number, step_title, lines in steps:
+        story.extend(_pdf_step_story(styles, step_number, step_title, lines))
+
+    story.extend(_pdf_result_story(styles, "\u03a6abs", phi_abs))
 
     doc.build(story)
     bio.seek(0)
@@ -1126,75 +1321,162 @@ if st.session_state["active_page"] == "Visor de espectros":
 # Pagina: Rendimiento cuantico
 # ============================================================
 if st.session_state["active_page"] == "Rendimiento cuantico":
-    st.title("Rendimiento cuantico relativo")
-    st.caption("Calcula Phi de una muestra comparandola con una referencia.")
+    st.title("Rendimiento cuantico")
+    st.caption("Calcula el rendimiento cuantico de fluorescencia por metodo relativo o absoluto.")
 
-    st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
-    st.write(
-        "Usa areas integradas de emision, absorbancias a la longitud de onda de excitacion "
-        "e indices de refraccion. Mantener absorbancias bajas ayuda a reducir errores por filtro interno."
-    )
+    tab_rel, tab_abs = st.tabs(["Rendimiento cuantico relativo", "Rendimiento cuantico absoluto"])
 
-    q1, q2 = st.columns(2)
-    with q1:
-        st.markdown("### Muestra")
-        sample_area = st.number_input("Area integrada muestra", min_value=0.0, value=1.0, format="%.6f")
-        sample_abs = st.number_input("Absorbancia muestra", min_value=0.000001, value=0.05, format="%.6f")
-        sample_n = st.number_input("Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f")
-    with q2:
-        st.markdown("### Referencia")
-        ref_phi = st.number_input("Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f")
-        ref_area = st.number_input("Area integrada referencia", min_value=0.000001, value=1.0, format="%.6f")
-        ref_abs = st.number_input("Absorbancia referencia", min_value=0.000001, value=0.05, format="%.6f")
-        ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f")
+    # ======================================================
+    # Seccion: rendimiento cuantico RELATIVO
+    # ======================================================
+    with tab_rel:
+        st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
+        st.write(
+            "Usa areas integradas de emision, absorbancias a la longitud de onda de excitacion "
+            "e indices de refraccion. Mantener absorbancias bajas ayuda a reducir errores por filtro interno."
+        )
 
-    phi = ref_phi * (sample_area / ref_area) * (ref_abs / sample_abs) * ((sample_n ** 2) / (ref_n ** 2))
-    st.metric("Rendimiento cuantico de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
-    st.latex(
-        fr"\Phi_x = {ref_phi:.4g}\left(\frac{{{sample_area:.4g}}}{{{ref_area:.4g}}}\right)"
-        fr"\left(\frac{{{ref_abs:.4g}}}{{{sample_abs:.4g}}}\right)"
-        fr"\left(\frac{{{sample_n:.4g}^2}}{{{ref_n:.4g}^2}}\right) = {phi:.4g}"
-    )
-    if phi > 1:
-        st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
+        q1, q2 = st.columns(2)
+        with q1:
+            st.markdown("### Muestra")
+            sample_area = st.number_input("Area integrada muestra", min_value=0.0, value=1.0, format="%.6f", key="rel_sample_area")
+            sample_abs = st.number_input("Absorbancia muestra", min_value=0.000001, value=0.05, format="%.6f", key="rel_sample_abs")
+            sample_n = st.number_input("Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n")
+        with q2:
+            st.markdown("### Referencia")
+            ref_phi = st.number_input("Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi")
+            ref_area = st.number_input("Area integrada referencia", min_value=0.000001, value=1.0, format="%.6f", key="rel_ref_area")
+            ref_abs = st.number_input("Absorbancia referencia", min_value=0.000001, value=0.05, format="%.6f", key="rel_ref_abs")
+            ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n")
 
-    st.markdown("### Exportar resultado")
-    st.caption("Genera un reporte con los datos de entrada, la formula y el resultado.")
+        rel_data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "sample_area": sample_area, "sample_abs": sample_abs, "sample_n": sample_n,
+            "ref_phi": ref_phi, "ref_area": ref_area, "ref_abs": ref_abs, "ref_n": ref_n,
+        }
+        phi, rel_steps = _relative_qy_steps(rel_data)
 
-    report_data = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "sample_area": sample_area,
-        "sample_abs": sample_abs,
-        "sample_n": sample_n,
-        "ref_phi": ref_phi,
-        "ref_area": ref_area,
-        "ref_abs": ref_abs,
-        "ref_n": ref_n,
-        "phi": phi,
-    }
+        st.markdown("### Desarrollo paso a paso")
+        ratio_area = sample_area / ref_area
+        ratio_abs = ref_abs / sample_abs
+        ratio_n2 = (sample_n ** 2) / (ref_n ** 2)
+        st.markdown("**Paso 1.** Razon de areas de emision integradas:")
+        st.latex(fr"\frac{{I_x}}{{I_{{ref}}}} = \frac{{{sample_area:.4g}}}{{{ref_area:.4g}}} = {ratio_area:.4g}")
+        st.markdown("**Paso 2.** Razon de absorbancias a la longitud de onda de excitacion:")
+        st.latex(fr"\frac{{A_{{ref}}}}{{A_x}} = \frac{{{ref_abs:.4g}}}{{{sample_abs:.4g}}} = {ratio_abs:.4g}")
+        st.markdown("**Paso 3.** Razon de indices de refraccion al cuadrado:")
+        st.latex(fr"\frac{{n_x^2}}{{n_{{ref}}^2}} = \frac{{{sample_n:.4g}^2}}{{{ref_n:.4g}^2}} = {ratio_n2:.4g}")
+        st.markdown("**Paso 4.** Sustituir y multiplicar todo junto con \u03a6ref:")
+        st.latex(
+            fr"\Phi_x = {ref_phi:.4g}\left({ratio_area:.4g}\right)\left({ratio_abs:.4g}\right)\left({ratio_n2:.4g}\right) = {phi:.4g}"
+        )
 
-    col_pdf, col_docx = st.columns(2)
-    with col_pdf:
-        if _HAS_REPORTLAB:
-            try:
-                pdf_bytes = build_quantum_yield_pdf(report_data)
-                st.download_button("Descargar PDF", data=pdf_bytes, file_name="rendimiento_cuantico.pdf",
-                                   mime="application/pdf", use_container_width=True)
-            except Exception as e:
-                st.error(f"No se pudo generar el PDF: {e}")
+        st.metric("Rendimiento cuantico relativo de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
+        if phi > 1:
+            st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
+
+        st.markdown("#### Exportar resultado")
+        col_pdf, col_docx = st.columns(2)
+        with col_pdf:
+            if _HAS_REPORTLAB:
+                try:
+                    pdf_bytes = build_relative_qy_pdf(rel_data)
+                    st.download_button("Descargar PDF", data=pdf_bytes, file_name="rendimiento_cuantico_relativo.pdf",
+                                       mime="application/pdf", use_container_width=True, key="rel_pdf")
+                except Exception as e:
+                    st.error(f"No se pudo generar el PDF: {e}")
+            else:
+                st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
+        with col_docx:
+            if _HAS_DOCX:
+                try:
+                    docx_bytes = build_relative_qy_docx(rel_data)
+                    st.download_button("Descargar Word (.docx)", data=docx_bytes, file_name="rendimiento_cuantico_relativo.docx",
+                                       mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                       use_container_width=True, key="rel_docx")
+                except Exception as e:
+                    st.error(f"No se pudo generar el documento Word: {e}")
+            else:
+                st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+
+    # ======================================================
+    # Seccion: rendimiento cuantico ABSOLUTO
+    # ======================================================
+    with tab_abs:
+        st.write(
+            "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
+            "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
+        )
+        st.latex(r"A = 1 - \frac{L_c}{L_a}")
+        st.latex(r"\Phi_{abs} = \frac{E_c - (1-A)\,E_a}{A\,L_a}")
+        st.caption(
+            "La = area de excitacion dispersada (referencia/blanco, sin excitar directamente la muestra). "
+            "Lc = area de excitacion dispersada con la muestra en el haz directo. "
+            "Ea = area de emision con excitacion indirecta. Ec = area de emision con excitacion directa."
+        )
+
+        a1, a2 = st.columns(2)
+        with a1:
+            st.markdown("### Excitacion")
+            L_a = st.number_input("La \u2014 referencia/blanco", min_value=0.000001, value=1.0, format="%.6f", key="abs_La")
+            L_c = st.number_input("Lc \u2014 con la muestra", min_value=0.0, value=0.5, format="%.6f", key="abs_Lc")
+        with a2:
+            st.markdown("### Emision")
+            E_a = st.number_input("Ea \u2014 excitacion indirecta", min_value=0.0, value=0.1, format="%.6f", key="abs_Ea")
+            E_c = st.number_input("Ec \u2014 excitacion directa", min_value=0.0, value=0.6, format="%.6f", key="abs_Ec")
+
+        abs_data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "L_a": L_a, "L_c": L_c, "E_a": E_a, "E_c": E_c,
+        }
+
+        if L_c > L_a:
+            st.error("Lc no puede ser mayor que La (la muestra no puede dispersar/transmitir mas luz de la que llega).")
         else:
-            st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
-    with col_docx:
-        if _HAS_DOCX:
-            try:
-                docx_bytes = build_quantum_yield_docx(report_data)
-                st.download_button("Descargar Word (.docx)", data=docx_bytes, file_name="rendimiento_cuantico.docx",
-                                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                   use_container_width=True)
-            except Exception as e:
-                st.error(f"No se pudo generar el documento Word: {e}")
-        else:
-            st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+            phi_abs, A, abs_steps = _absolute_qy_steps(abs_data)
+
+            st.markdown("### Desarrollo paso a paso")
+            lc_la_ratio = L_c / L_a
+            st.markdown("**Paso 1.** Fraccion de luz absorbida por la muestra:")
+            st.latex(fr"A = 1 - \frac{{L_c}}{{L_a}} = 1 - \frac{{{L_c:.4g}}}{{{L_a:.4g}}} = 1 - {lc_la_ratio:.4g} = {A:.4g}")
+            st.markdown("**Paso 2.** Termino de emision indirecta corregido:")
+            st.latex(fr"(1-A)\,E_a = (1 - {A:.4g})\times {E_a:.4g} = {(1 - A) * E_a:.4g}")
+            st.markdown("**Paso 3.** Numerador (emision directa menos la indirecta corregida):")
+            st.latex(fr"E_c - (1-A)E_a = {E_c:.4g} - {(1 - A) * E_a:.4g} = {E_c - (1 - A) * E_a:.4g}")
+            st.markdown("**Paso 4.** Denominador:")
+            st.latex(fr"A \times L_a = {A:.4g} \times {L_a:.4g} = {A * L_a:.4g}")
+            st.markdown("**Paso 5.** Dividir para obtener el rendimiento cuantico absoluto:")
+            st.latex(
+                fr"\Phi_{{abs}} = \frac{{{E_c - (1 - A) * E_a:.4g}}}{{{A * L_a:.4g}}} = {phi_abs:.4g}"
+            )
+
+            st.metric("Rendimiento cuantico absoluto de la muestra", f"{phi_abs:.4f}", f"{phi_abs * 100:.2f}%")
+            if phi_abs > 1:
+                st.warning("El resultado es mayor que 1. Revisa las areas integradas o el montaje experimental.")
+
+            st.markdown("#### Exportar resultado")
+            col_pdf2, col_docx2 = st.columns(2)
+            with col_pdf2:
+                if _HAS_REPORTLAB:
+                    try:
+                        pdf_bytes_abs = build_absolute_qy_pdf(abs_data)
+                        st.download_button("Descargar PDF", data=pdf_bytes_abs, file_name="rendimiento_cuantico_absoluto.pdf",
+                                           mime="application/pdf", use_container_width=True, key="abs_pdf")
+                    except Exception as e:
+                        st.error(f"No se pudo generar el PDF: {e}")
+                else:
+                    st.info("Para exportar a PDF instala la libreria 'reportlab' (pip install reportlab).")
+            with col_docx2:
+                if _HAS_DOCX:
+                    try:
+                        docx_bytes_abs = build_absolute_qy_docx(abs_data)
+                        st.download_button("Descargar Word (.docx)", data=docx_bytes_abs, file_name="rendimiento_cuantico_absoluto.docx",
+                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                           use_container_width=True, key="abs_docx")
+                    except Exception as e:
+                        st.error(f"No se pudo generar el documento Word: {e}")
+                else:
+                    st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
 
     st.stop()
 
