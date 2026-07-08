@@ -438,6 +438,72 @@ def show_and_close(fig):
     plt.close(fig)
 
 
+def area_input(label, key_prefix, default_value=1.0, min_value=0.0):
+    """Campo de 'area integrada' reutilizable: manual o calculada
+    automaticamente subiendo un espectro (wavelength + intensidad).
+    Devuelve el valor numerico del area a usar en el calculo."""
+    mode = st.radio(
+        f"{label}: origen del dato", ["Manual", "Subir espectro"],
+        key=f"{key_prefix}_mode", horizontal=True,
+    )
+
+    if mode == "Manual":
+        return st.number_input(label, min_value=min_value, value=default_value,
+                               format="%.6f", key=f"{key_prefix}_manual")
+
+    f = st.file_uploader(f"Espectro para: {label}", type=["csv", "xlsx"], key=f"{key_prefix}_file")
+    if f is None:
+        st.info("Sube un archivo CSV o XLSX para calcular el area automaticamente.")
+        return default_value
+
+    try:
+        raw = f.getvalue()
+        if f.name.lower().endswith(".xlsx"):
+            sheets = list_excel_sheets(raw)
+            sheet = st.selectbox("Hoja", options=sheets, key=f"{key_prefix}_sheet")
+            df = load_excel_sheet(raw, sheet)
+        else:
+            df = load_csv_df(raw)
+
+        wl_guess, int_guess = guess_columns(df)
+        cols = list(df.columns)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            wl_col = st.selectbox("Columna wavelength", options=cols,
+                                  index=cols.index(wl_guess) if wl_guess in cols else 0,
+                                  key=f"{key_prefix}_wlcol")
+        with c2:
+            int_col = st.selectbox("Columna intensidad", options=cols,
+                                   index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
+                                   key=f"{key_prefix}_intcol")
+        with c3:
+            normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"],
+                                     key=f"{key_prefix}_norm")
+
+        c4, c5 = st.columns(2)
+        with c4:
+            wl_min = st.number_input("Min nm", min_value=100, max_value=10000, value=200, key=f"{key_prefix}_wlmin")
+        with c5:
+            wl_max = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"{key_prefix}_wlmax")
+
+        wl, intensity = filter_and_normalize(df[wl_col], df[int_col], wl_min, wl_max, normalize)
+        peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
+
+        fig, ax = plt.subplots(figsize=(4, 2.2))
+        ax.plot(wl, intensity, color="#1f77b4", linewidth=1.5)
+        ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
+        ax.set_ylabel("Intensidad", fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax.grid(alpha=0.25)
+        show_and_close(fig)
+
+        st.success(f"Area integrada calculada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
+        return area
+    except Exception as e:
+        st.error(f"No se pudo calcular el area a partir del espectro: {e}")
+        return default_value
+
+
 def _docx_report_header(doc, title, timestamp, intro_text):
     heading = doc.add_heading(title, level=1)
     for run in heading.runs:
@@ -1339,13 +1405,13 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         q1, q2 = st.columns(2)
         with q1:
             st.markdown("### Muestra")
-            sample_area = st.number_input("Area integrada muestra", min_value=0.0, value=1.0, format="%.6f", key="rel_sample_area")
+            sample_area = area_input("Area integrada muestra", "rel_sample_area", default_value=1.0)
             sample_abs = st.number_input("Absorbancia muestra", min_value=0.000001, value=0.05, format="%.6f", key="rel_sample_abs")
             sample_n = st.number_input("Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n")
         with q2:
             st.markdown("### Referencia")
             ref_phi = st.number_input("Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi")
-            ref_area = st.number_input("Area integrada referencia", min_value=0.000001, value=1.0, format="%.6f", key="rel_ref_area")
+            ref_area = area_input("Area integrada referencia", "rel_ref_area", default_value=1.0)
             ref_abs = st.number_input("Absorbancia referencia", min_value=0.000001, value=0.05, format="%.6f", key="rel_ref_abs")
             ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n")
 
@@ -1418,12 +1484,13 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         a1, a2 = st.columns(2)
         with a1:
             st.markdown("### Excitacion")
-            L_a = st.number_input("La \u2014 referencia/blanco", min_value=0.000001, value=1.0, format="%.6f", key="abs_La")
-            L_c = st.number_input("Lc \u2014 con la muestra", min_value=0.0, value=0.5, format="%.6f", key="abs_Lc")
+            L_a = area_input("La \u2014 referencia/blanco", "abs_La", default_value=1.0)
+            L_c = area_input("Lc \u2014 con la muestra", "abs_Lc", default_value=0.5)
         with a2:
             st.markdown("### Emision")
-            E_a = st.number_input("Ea \u2014 excitacion indirecta", min_value=0.0, value=0.1, format="%.6f", key="abs_Ea")
-            E_c = st.number_input("Ec \u2014 excitacion directa", min_value=0.0, value=0.6, format="%.6f", key="abs_Ec")
+            E_a = area_input("Ea \u2014 excitacion indirecta", "abs_Ea", default_value=0.1)
+            E_c = area_input("Ec \u2014 excitacion directa", "abs_Ec", default_value=0.6)
+
 
         abs_data = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
