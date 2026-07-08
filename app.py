@@ -46,14 +46,19 @@ HAS_DIALOG = callable(DIALOG_DECORATOR)
 if "active_page" not in st.session_state:
     st.session_state["active_page"] = "Inicio"
 
-# Hover suave en rojo para todos los botones de la app
+# Hover suave (tinte rojo claro + sombra) para todos los botones de la app
 st.markdown(
     """
     <style>
+    div[data-testid="stButton"] > button {
+        transition: background-color .15s ease, border-color .15s ease,
+                    color .15s ease, box-shadow .15s ease;
+    }
     div[data-testid="stButton"] > button:hover {
-        background-color: #fca5a5 !important;
+        background-color: #fff1f1 !important;
         border-color: #f87171 !important;
-        color: #7f1d1d !important;
+        color: #b91c1c !important;
+        box-shadow: 0 2px 6px rgba(248, 113, 113, 0.25);
     }
     </style>
     """,
@@ -563,10 +568,30 @@ def build_quantum_yield_pdf(data: dict) -> bytes:
 # Navegacion global (sidebar) - vacia en Inicio, con enlaces en el resto
 # ============================================================
 PAGES = ["Inicio", "Analisis CIE 1931", "Visor de espectros", "Rendimiento cuantico", "Aprender"]
+PAGE_ICONS = {
+    "Inicio": "\U0001F3E0",
+    "Analisis CIE 1931": "\U0001F3A8",
+    "Visor de espectros": "\U0001F4C8",
+    "Rendimiento cuantico": "\u269B\uFE0F",
+    "Aprender": "\U0001F4DA",
+}
+
 if st.session_state["active_page"] != "Inicio":
+    st.sidebar.markdown(
+        """
+        <style>
+        div[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+            text-align: left;
+            border-radius: 8px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.sidebar.header("Navegacion")
     for _page_name in PAGES:
-        if st.sidebar.button(_page_name, use_container_width=True, key=f"nav_{_page_name}"):
+        _icon = PAGE_ICONS.get(_page_name, "")
+        if st.sidebar.button(f"{_icon}  {_page_name}", use_container_width=True, key=f"nav_{_page_name}"):
             go_to_page(_page_name)
     st.sidebar.markdown("---")
 else:
@@ -574,20 +599,29 @@ else:
         """
         <style>
         div[class*="st-key-toolbox_"] {
-            padding: 2px 0 4px 0;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: .55rem .7rem;
+            margin-bottom: .6rem;
+            background-color: #fafafa;
+            transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+        }
+        div[class*="st-key-toolbox_"]:hover {
+            border-color: #fca5a5;
+            background-color: #fff5f5;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
         }
         div[class*="st-key-toolbox_"] .tool-label {
-            padding: .35rem .6rem;
-            border-radius: 6px;
+            font-weight: 600;
             font-size: .95rem;
             color: #31333F;
-            transition: background-color .15s ease, color .15s ease;
+            transition: color .2s ease;
         }
         div[class*="st-key-toolbox_"]:hover .tool-label {
-            background-color: #fca5a5;
-            color: #7f1d1d;
+            color: #b91c1c;
         }
         div[class*="st-key-toolbox_"] div[data-testid="stHorizontalBlock"] {
+            margin-top: .5rem;
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -598,11 +632,15 @@ else:
             visibility: visible;
             pointer-events: auto;
         }
+        div[class*="st-key-toolbox_"] div[data-testid="stButton"] > button {
+            border-radius: 7px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.sidebar.header("Herramientas")
+    st.sidebar.caption("Pasa el cursor sobre un modulo para ver sus opciones.")
 
     _tools = [
         ("Analisis CIE 1931", "cie", "CIE 1931"),
@@ -610,6 +648,7 @@ else:
         ("Rendimiento cuantico", "rendimiento", "Rendimiento cuantico"),
     ]
     for _tool_name, _tool_key, _learn_topic in _tools:
+        _icon = PAGE_ICONS.get(_tool_name, "")
         try:
             _tool_box = st.sidebar.container(key=f"toolbox_{_tool_key}")
         except TypeError:
@@ -617,7 +656,7 @@ else:
             # hover-reveal pero sigue funcionando como lista simple.
             _tool_box = st.sidebar.container()
         with _tool_box:
-            st.markdown(f'<div class="tool-label">{_tool_name}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="tool-label">{_icon}&nbsp;&nbsp;{_tool_name}</div>', unsafe_allow_html=True)
             _b1, _b2 = st.columns(2)
             with _b1:
                 if st.button("Calcular", key=f"{_tool_key}_calc", use_container_width=True):
