@@ -438,12 +438,14 @@ def show_and_close(fig):
     plt.close(fig)
 
 
-def area_input(label, key_prefix, default_value=1.0, min_value=0.0):
+def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=None):
     """Campo de 'area integrada' reutilizable: manual o calculada
     automaticamente subiendo un espectro (wavelength + intensidad).
     Devuelve el valor numerico del area a usar en el calculo."""
     with st.container(border=True):
         st.markdown(f"**{label}**")
+        if help_text:
+            st.caption(help_text)
         mode = st.radio(
             "Origen del dato", ["Manual", "Subir espectro"],
             key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
@@ -507,13 +509,15 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0):
             return default_value
 
 
-def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_default=350.0):
+def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_default=350.0, help_text=None):
     """Campo de 'absorbancia' reutilizable: manual, o leida automaticamente
     de un espectro de absorcion o de reflectancia difusa (convertida con la
     funcion de Kubelka-Munk) a la longitud de onda de excitacion. Devuelve
     el valor numerico a usar en el calculo de rendimiento cuantico."""
     with st.container(border=True):
         st.markdown(f"**{label}**")
+        if help_text:
+            st.caption(help_text)
         mode = st.radio(
             "Origen del dato", ["Manual", "Subir espectro"],
             key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
@@ -608,8 +612,10 @@ def _docx_report_header(doc, title, timestamp, intro_text):
     doc.add_paragraph(intro_text)
 
 
-def _docx_add_step(doc, step_number, step_title, lines):
+def _docx_add_step(doc, step_number, step_title, concept, lines):
     doc.add_heading(f"Paso {step_number}. {step_title}", level=2)
+    if concept:
+        doc.add_paragraph(concept)
     for line in lines:
         p = doc.add_paragraph()
         p.add_run(line).italic = True
@@ -642,8 +648,11 @@ def _pdf_header_story(styles, title, timestamp, intro_text):
     ]
 
 
-def _pdf_step_story(styles, step_number, step_title, lines):
+def _pdf_step_story(styles, step_number, step_title, concept, lines):
     story = [Paragraph(f"<b>Paso {step_number}. {step_title}</b>", styles["Heading2"])]
+    if concept:
+        story.append(Paragraph(concept, styles["Normal"]))
+        story.append(Spacer(1, 4))
     for line in lines:
         story.append(Paragraph(f"<i>{line}</i>", styles["Normal"]))
         story.append(Spacer(1, 4))
@@ -680,23 +689,42 @@ def _relative_qy_steps(data):
     phi = data["ref_phi"] * ratio_area * ratio_abs * ratio_n2
 
     steps = [
-        (1, "Formula general del metodo relativo", [
+        (1, "Formula general del metodo relativo",
+         "El metodo relativo compara la muestra con una sustancia de referencia cuyo rendimiento "
+         "cuantico ya se conoce de la literatura, midiendo ambas bajo la misma longitud de onda de "
+         "excitacion y, si es posible, con absorbancias bajas y similares.",
+         [
             "\u03a6x = \u03a6ref \u00d7 (Ix / Iref) \u00d7 (Aref / Ax) \u00d7 (nx\u00b2 / nref\u00b2)",
         ]),
-        (2, "Razon de areas de emision integradas (Ix / Iref)", [
+        (2, "Razon de areas de emision integradas (Ix / Iref)",
+         "Esta razon compara cuanta luz emite la muestra frente a la referencia. Un valor mayor que 1 "
+         "significa que la muestra emite mas area de fluorescencia que la referencia, en igualdad de condiciones.",
+         [
             f"Ix / Iref = {data['sample_area']:.6g} / {data['ref_area']:.6g} = {ratio_area:.6g}",
         ]),
-        (3, "Razon de absorbancias a la longitud de onda de excitacion (Aref / Ax)", [
+        (3, "Razon de absorbancias a la longitud de onda de excitacion (Aref / Ax)",
+         "Esta razon corrige el hecho de que la muestra y la referencia no absorben exactamente la "
+         "misma cantidad de luz de excitacion; sin esta correccion, la comparacion del paso anterior no seria justa.",
+         [
             f"Aref / Ax = {data['ref_abs']:.6g} / {data['sample_abs']:.6g} = {ratio_abs:.6g}",
         ]),
-        (4, "Razon de indices de refraccion al cuadrado (nx\u00b2 / nref\u00b2)", [
+        (4, "Razon de indices de refraccion al cuadrado (nx\u00b2 / nref\u00b2)",
+         "Corrige por el solvente: la luz se refracta distinto en cada solvente, lo que afecta cuanta "
+         "emision llega efectivamente al detector. Si ambas muestras usan el mismo solvente, esta razon vale 1.",
+         [
             f"nx\u00b2 / nref\u00b2 = {data['sample_n']:.6g}\u00b2 / {data['ref_n']:.6g}\u00b2 "
             f"= {data['sample_n'] ** 2:.6g} / {data['ref_n'] ** 2:.6g} = {ratio_n2:.6g}",
         ]),
-        (5, "Sustituir todas las razones en la formula", [
+        (5, "Sustituir todas las razones en la formula",
+         "Con las tres correcciones ya calculadas, se combinan multiplicando el rendimiento cuantico "
+         "conocido de la referencia por cada una de ellas.",
+         [
             f"\u03a6x = {data['ref_phi']:.6g} \u00d7 {ratio_area:.6g} \u00d7 {ratio_abs:.6g} \u00d7 {ratio_n2:.6g}",
         ]),
-        (6, "Multiplicar y obtener el resultado", [
+        (6, "Multiplicar y obtener el resultado",
+         "El numero final es el rendimiento cuantico relativo de la muestra: la fraccion de fotones "
+         "absorbidos que la muestra reemite como fluorescencia.",
+         [
             f"\u03a6x = {phi:.6g}",
         ]),
     ]
@@ -734,8 +762,8 @@ def build_relative_qy_docx(data: dict) -> bytes:
         cells[2].text = ref_val
 
     doc.add_heading("Desarrollo matematico", level=2)
-    for step_number, step_title, lines in steps:
-        _docx_add_step(doc, step_number, step_title, lines)
+    for step_number, step_title, concept, lines in steps:
+        _docx_add_step(doc, step_number, step_title, concept, lines)
 
     _docx_add_result(doc, "\u03a6x", phi)
 
@@ -781,8 +809,8 @@ def build_relative_qy_pdf(data: dict) -> bytes:
 
     story.append(Paragraph("<b>Desarrollo matematico</b>", styles["Heading2"]))
     story.append(Spacer(1, 6))
-    for step_number, step_title, lines in steps:
-        story.extend(_pdf_step_story(styles, step_number, step_title, lines))
+    for step_number, step_title, concept, lines in steps:
+        story.extend(_pdf_step_story(styles, step_number, step_title, concept, lines))
 
     story.extend(_pdf_result_story(styles, "\u03a6x", phi))
 
@@ -808,25 +836,43 @@ def _absolute_qy_steps(data):
     phi_abs = numerator / denominator if denominator != 0 else float("nan")
 
     steps = [
-        (1, "Fraccion de luz absorbida (A)", [
+        (1, "Fraccion de luz absorbida (A)",
+         "Antes de calcular el rendimiento cuantico hay que saber que fraccion de la luz de excitacion "
+         "realmente absorbio la muestra. Se obtiene comparando cuanta luz de excitacion se detecta con "
+         "la muestra puesta (Lc) frente a sin ella, solo el blanco/referencia (La).",
+         [
             "A = 1 \u2212 (Lc / La)",
             f"Lc / La = {Lc:.6g} / {La:.6g} = {lc_la_ratio:.6g}",
             f"A = 1 \u2212 {lc_la_ratio:.6g} = {A:.6g}",
         ]),
-        (2, "Formula general del rendimiento cuantico absoluto", [
+        (2, "Formula general del rendimiento cuantico absoluto",
+         "A diferencia del metodo relativo, este metodo no necesita una sustancia de referencia externa: "
+         "toda la informacion sale de cuatro mediciones hechas con la misma esfera integradora.",
+         [
             "\u03a6abs = (Ec \u2212 (1 \u2212 A)\u00b7Ea) / (A\u00b7La)",
         ]),
-        (3, "Termino de emision indirecta corregido: (1 \u2212 A)\u00b7Ea", [
+        (3, "Termino de emision indirecta corregido: (1 \u2212 A)\u00b7Ea",
+         "Este termino corrige la emision que ocurriria por excitacion indirecta (luz dispersada dentro "
+         "de la esfera que tambien excita la muestra), para no contarla dos veces en el resultado final.",
+         [
             f"(1 \u2212 A) = 1 \u2212 {A:.6g} = {1 - A:.6g}",
             f"(1 \u2212 A)\u00b7Ea = {1 - A:.6g} \u00d7 {Ea:.6g} = {one_minus_A_times_Ea:.6g}",
         ]),
-        (4, "Numerador: Ec \u2212 (1 \u2212 A)\u00b7Ea", [
+        (4, "Numerador: Ec \u2212 (1 \u2212 A)\u00b7Ea",
+         "El numerador representa la emision de fluorescencia que puede atribuirse unicamente a la "
+         "excitacion directa de la muestra, ya sin la contribucion indirecta del paso anterior.",
+         [
             f"Numerador = {Ec:.6g} \u2212 {one_minus_A_times_Ea:.6g} = {numerator:.6g}",
         ]),
-        (5, "Denominador: A\u00b7La", [
+        (5, "Denominador: A\u00b7La",
+         "El denominador representa el total de fotones de excitacion que la muestra efectivamente absorbio.",
+         [
             f"Denominador = {A:.6g} \u00d7 {La:.6g} = {denominator:.6g}",
         ]),
-        (6, "Dividir numerador entre denominador", [
+        (6, "Dividir numerador entre denominador",
+         "El cociente entre fotones emitidos (numerador) y fotones absorbidos (denominador) es, por "
+         "definicion, el rendimiento cuantico absoluto de la muestra.",
+         [
             f"\u03a6abs = {numerator:.6g} / {denominator:.6g} = {phi_abs:.6g}",
         ]),
     ]
@@ -863,8 +909,8 @@ def build_absolute_qy_docx(data: dict) -> bytes:
         cells[1].text = val
 
     doc.add_heading("Desarrollo matematico", level=2)
-    for step_number, step_title, lines in steps:
-        _docx_add_step(doc, step_number, step_title, lines)
+    for step_number, step_title, concept, lines in steps:
+        _docx_add_step(doc, step_number, step_title, concept, lines)
 
     _docx_add_result(doc, "\u03a6abs", phi_abs)
 
@@ -911,8 +957,8 @@ def build_absolute_qy_pdf(data: dict) -> bytes:
 
     story.append(Paragraph("<b>Desarrollo matematico</b>", styles["Heading2"]))
     story.append(Spacer(1, 6))
-    for step_number, step_title, lines in steps:
-        story.extend(_pdf_step_story(styles, step_number, step_title, lines))
+    for step_number, step_title, concept, lines in steps:
+        story.extend(_pdf_step_story(styles, step_number, step_title, concept, lines))
 
     story.extend(_pdf_result_story(styles, "\u03a6abs", phi_abs))
 
@@ -1486,30 +1532,82 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     st.title("Rendimiento cuantico")
     st.caption("Calcula el rendimiento cuantico de fluorescencia por metodo relativo o absoluto.")
 
+    show_explanations = st.toggle(
+        "Mostrar explicaciones conceptuales",
+        value=True, key="show_explanations",
+        help="Actívalo para ver, junto a cada paso, una frase sobre qué significa esa cuenta. "
+             "Desactívalo para un desarrollo mas compacto, solo con la matematica.",
+    )
+    st.caption(
+        "Los reportes en PDF y Word siempre incluyen el desarrollo completo con explicaciones, "
+        "sin importar esta opcion."
+    )
+
     tab_rel, tab_abs = st.tabs(["Rendimiento cuantico relativo", "Rendimiento cuantico absoluto"])
 
     # ======================================================
     # Seccion: rendimiento cuantico RELATIVO
     # ======================================================
     with tab_rel:
-        st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
+        top1, top2 = st.columns([3, 1])
+        with top1:
+            st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
+        with top2:
+            if st.button("\u00bfPor que esta formula? \u2192 Aprender", key="rel_learn_link", use_container_width=True):
+                st.session_state["learn_topic"] = "Rendimiento cuantico"
+                go_to_page("Aprender")
         st.write(
             "Usa areas integradas de emision, absorbancias a la longitud de onda de excitacion "
             "e indices de refraccion. Mantener absorbancias bajas ayuda a reducir errores por filtro interno."
         )
 
+        if st.button("Cargar ejemplo (sulfato de quinina como referencia)", key="rel_load_example"):
+            st.session_state["rel_sample_area_mode"] = "Manual"
+            st.session_state["rel_sample_area_manual"] = 0.72
+            st.session_state["rel_sample_abs_mode"] = "Manual"
+            st.session_state["rel_sample_abs_manual"] = 0.045
+            st.session_state["rel_sample_n"] = 1.333
+            st.session_state["rel_ref_phi"] = 0.546
+            st.session_state["rel_ref_area_mode"] = "Manual"
+            st.session_state["rel_ref_area_manual"] = 1.0
+            st.session_state["rel_ref_abs_mode"] = "Manual"
+            st.session_state["rel_ref_abs_manual"] = 0.045
+            st.session_state["rel_ref_n"] = 1.333
+            st.rerun()
+
         q1, q2 = st.columns(2)
         with q1:
             st.markdown("### Muestra")
-            sample_area = area_input("Area integrada de emision (muestra)", "rel_sample_area", default_value=1.0)
-            sample_abs = absorbance_input("Absorbancia/reflectancia a la excitacion (muestra)", "rel_sample_abs", default_value=0.05)
-            sample_n = st.number_input("Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n")
+            sample_area = area_input(
+                "Area integrada de emision (muestra)", "rel_sample_area", default_value=1.0,
+                help_text="Ix: area bajo la curva del espectro de emision de tu muestra.",
+            )
+            sample_abs = absorbance_input(
+                "Absorbancia/reflectancia a la excitacion (muestra)", "rel_sample_abs", default_value=0.05,
+                help_text="Ax: cuanta luz de excitacion absorbe la muestra. Valores bajos (<0.1) evitan errores de filtro interno.",
+            )
+            sample_n = st.number_input(
+                "Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n",
+                help="nx: indice de refraccion del solvente de la muestra (agua \u2248 1.333, etanol \u2248 1.36).",
+            )
         with q2:
             st.markdown("### Referencia")
-            ref_phi = st.number_input("Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi")
-            ref_area = area_input("Area integrada de emision (referencia)", "rel_ref_area", default_value=1.0)
-            ref_abs = absorbance_input("Absorbancia/reflectancia a la excitacion (referencia)", "rel_ref_abs", default_value=0.05)
-            ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n")
+            ref_phi = st.number_input(
+                "Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi",
+                help="\u03a6ref: rendimiento cuantico ya conocido de la referencia, tomado de la literatura.",
+            )
+            ref_area = area_input(
+                "Area integrada de emision (referencia)", "rel_ref_area", default_value=1.0,
+                help_text="Iref: area bajo la curva del espectro de emision de la referencia.",
+            )
+            ref_abs = absorbance_input(
+                "Absorbancia/reflectancia a la excitacion (referencia)", "rel_ref_abs", default_value=0.05,
+                help_text="Aref: absorbancia de la referencia a la misma longitud de onda de excitacion.",
+            )
+            ref_n = st.number_input(
+                "Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n",
+                help="nref: indice de refraccion del solvente de la referencia.",
+            )
 
         rel_data = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -1522,20 +1620,56 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         ratio_area = sample_area / ref_area
         ratio_abs = ref_abs / sample_abs
         ratio_n2 = (sample_n ** 2) / (ref_n ** 2)
+
         st.markdown("**Paso 1.** Razon de areas de emision integradas:")
+        if show_explanations:
+            st.caption(rel_steps[1][2])
         st.latex(fr"\frac{{I_x}}{{I_{{ref}}}} = \frac{{{sample_area:.4g}}}{{{ref_area:.4g}}} = {ratio_area:.4g}")
+
         st.markdown("**Paso 2.** Razon de absorbancias a la longitud de onda de excitacion:")
+        if show_explanations:
+            st.caption(rel_steps[2][2])
         st.latex(fr"\frac{{A_{{ref}}}}{{A_x}} = \frac{{{ref_abs:.4g}}}{{{sample_abs:.4g}}} = {ratio_abs:.4g}")
+
         st.markdown("**Paso 3.** Razon de indices de refraccion al cuadrado:")
+        if show_explanations:
+            st.caption(rel_steps[3][2])
         st.latex(fr"\frac{{n_x^2}}{{n_{{ref}}^2}} = \frac{{{sample_n:.4g}^2}}{{{ref_n:.4g}^2}} = {ratio_n2:.4g}")
+
         st.markdown("**Paso 4.** Sustituir y multiplicar todo junto con \u03a6ref:")
+        if show_explanations:
+            st.caption(rel_steps[4][2])
         st.latex(
             fr"\Phi_x = {ref_phi:.4g}\left({ratio_area:.4g}\right)\left({ratio_abs:.4g}\right)\left({ratio_n2:.4g}\right) = {phi:.4g}"
         )
+        if show_explanations:
+            st.caption(rel_steps[5][2])
 
         st.metric("Rendimiento cuantico relativo de la muestra", f"{phi:.4f}", f"{phi * 100:.2f}%")
+
         if phi > 1:
-            st.warning("El resultado es mayor que 1. Revisa areas, absorbancias, referencia o correcciones experimentales.")
+            st.warning(
+                "El resultado es mayor que 1, lo cual no es fisicamente posible (nunca se puede emitir "
+                "mas fotones de los que se absorben). Causas tipicas:\n"
+                "- **Efecto de filtro interno o reabsorcion**: absorbancias demasiado altas (>0.1) distorsionan el area de emision.\n"
+                "- **Rango de integracion inconsistente**: revisa que el area de muestra y referencia cubran el mismo rango espectral.\n"
+                "- **\u03a6ref incorrecto**: verifica el valor de referencia contra la literatura, incluyendo el solvente y la longitud de onda usados.\n"
+                "- **Linea base sin corregir**: una linea base desplazada infla el area integrada."
+            )
+        elif show_explanations:
+            if phi < 0.1:
+                nivel = "bajo"
+                comentario = "tipico de emisores con mucha desactivacion no radiativa (perdida de energia como calor)."
+            elif phi < 0.5:
+                nivel = "moderado"
+                comentario = "un rango comun para muchos complejos organicos y de lantanidos con ligandos organicos."
+            else:
+                nivel = "alto"
+                comentario = "tipico de buenos fluoroforos organicos (p. ej. rodaminas, fluoresceina)."
+            st.caption(
+                f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
+                "no una regla estricta; el valor esperado depende mucho del sistema quimico especifico."
+            )
 
         st.markdown("#### Exportar resultado")
         col_pdf, col_docx = st.columns(2)
@@ -1565,10 +1699,16 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     # Seccion: rendimiento cuantico ABSOLUTO
     # ======================================================
     with tab_abs:
-        st.write(
-            "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
-            "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
-        )
+        topa1, topa2 = st.columns([3, 1])
+        with topa1:
+            st.write(
+                "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
+                "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
+            )
+        with topa2:
+            if st.button("\u00bfPor que este metodo? \u2192 Aprender", key="abs_learn_link", use_container_width=True):
+                st.session_state["learn_topic"] = "Rendimiento cuantico"
+                go_to_page("Aprender")
         st.latex(r"A = 1 - \frac{L_c}{L_a}")
         st.latex(r"\Phi_{abs} = \frac{E_c - (1-A)\,E_a}{A\,L_a}")
         st.caption(
@@ -1577,16 +1717,30 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
             "Ea = area de emision con excitacion indirecta. Ec = area de emision con excitacion directa."
         )
 
+        if st.button("Cargar ejemplo", key="abs_load_example"):
+            st.session_state["abs_La_mode"] = "Manual"
+            st.session_state["abs_La_manual"] = 1.0
+            st.session_state["abs_Lc_mode"] = "Manual"
+            st.session_state["abs_Lc_manual"] = 0.35
+            st.session_state["abs_Ea_mode"] = "Manual"
+            st.session_state["abs_Ea_manual"] = 0.05
+            st.session_state["abs_Ec_mode"] = "Manual"
+            st.session_state["abs_Ec_manual"] = 0.42
+            st.rerun()
+
         a1, a2 = st.columns(2)
         with a1:
             st.markdown("### Excitacion")
-            L_a = area_input("La \u2014 referencia/blanco", "abs_La", default_value=1.0)
-            L_c = area_input("Lc \u2014 con la muestra", "abs_Lc", default_value=0.5)
+            L_a = area_input("La \u2014 referencia/blanco", "abs_La", default_value=1.0,
+                             help_text="Area del pico de excitacion dispersada, midiendo solo el blanco o la referencia.")
+            L_c = area_input("Lc \u2014 con la muestra", "abs_Lc", default_value=0.5,
+                             help_text="Area del mismo pico de excitacion, ahora con la muestra puesta en el haz directo.")
         with a2:
             st.markdown("### Emision")
-            E_a = area_input("Ea \u2014 excitacion indirecta", "abs_Ea", default_value=0.1)
-            E_c = area_input("Ec \u2014 excitacion directa", "abs_Ec", default_value=0.6)
-
+            E_a = area_input("Ea \u2014 excitacion indirecta", "abs_Ea", default_value=0.1,
+                             help_text="Area de emision cuando la muestra se excita solo indirectamente (luz dispersada dentro de la esfera).")
+            E_c = area_input("Ec \u2014 excitacion directa", "abs_Ec", default_value=0.6,
+                             help_text="Area de emision cuando la muestra se excita directamente con el haz.")
 
         abs_data = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -1600,22 +1754,57 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
 
             st.markdown("### Desarrollo paso a paso")
             lc_la_ratio = L_c / L_a
+
             st.markdown("**Paso 1.** Fraccion de luz absorbida por la muestra:")
+            if show_explanations:
+                st.caption(abs_steps[0][2])
             st.latex(fr"A = 1 - \frac{{L_c}}{{L_a}} = 1 - \frac{{{L_c:.4g}}}{{{L_a:.4g}}} = 1 - {lc_la_ratio:.4g} = {A:.4g}")
+
             st.markdown("**Paso 2.** Termino de emision indirecta corregido:")
+            if show_explanations:
+                st.caption(abs_steps[2][2])
             st.latex(fr"(1-A)\,E_a = (1 - {A:.4g})\times {E_a:.4g} = {(1 - A) * E_a:.4g}")
+
             st.markdown("**Paso 3.** Numerador (emision directa menos la indirecta corregida):")
+            if show_explanations:
+                st.caption(abs_steps[3][2])
             st.latex(fr"E_c - (1-A)E_a = {E_c:.4g} - {(1 - A) * E_a:.4g} = {E_c - (1 - A) * E_a:.4g}")
+
             st.markdown("**Paso 4.** Denominador:")
+            if show_explanations:
+                st.caption(abs_steps[4][2])
             st.latex(fr"A \times L_a = {A:.4g} \times {L_a:.4g} = {A * L_a:.4g}")
+
             st.markdown("**Paso 5.** Dividir para obtener el rendimiento cuantico absoluto:")
+            if show_explanations:
+                st.caption(abs_steps[5][2])
             st.latex(
                 fr"\Phi_{{abs}} = \frac{{{E_c - (1 - A) * E_a:.4g}}}{{{A * L_a:.4g}}} = {phi_abs:.4g}"
             )
 
             st.metric("Rendimiento cuantico absoluto de la muestra", f"{phi_abs:.4f}", f"{phi_abs * 100:.2f}%")
+
             if phi_abs > 1:
-                st.warning("El resultado es mayor que 1. Revisa las areas integradas o el montaje experimental.")
+                st.warning(
+                    "El resultado es mayor que 1, lo cual no es fisicamente posible. Causas tipicas:\n"
+                    "- **Mala separacion entre el pico de excitacion y el de emision** al integrar las areas.\n"
+                    "- **Geometria inconsistente** entre las mediciones de La/Lc y Ea/Ec (deben usar el mismo montaje).\n"
+                    "- **Muestra que dispersa mucha luz** (solidos/polvos), lo que distorsiona el pico de excitacion."
+                )
+            elif show_explanations:
+                if phi_abs < 0.1:
+                    nivel = "bajo"
+                    comentario = "tipico de emisores con mucha desactivacion no radiativa."
+                elif phi_abs < 0.5:
+                    nivel = "moderado"
+                    comentario = "un rango comun para complejos de lantanidos y materiales solidos luminiscentes."
+                else:
+                    nivel = "alto"
+                    comentario = "tipico de buenos emisores solidos o fosforos comerciales."
+                st.caption(
+                    f"Orientativo: un \u03a6 {nivel} como este es {comentario} Esto es solo una guia general, "
+                    "no una regla estricta."
+                )
 
             st.markdown("#### Exportar resultado")
             col_pdf2, col_docx2 = st.columns(2)
