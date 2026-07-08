@@ -442,66 +442,162 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0):
     """Campo de 'area integrada' reutilizable: manual o calculada
     automaticamente subiendo un espectro (wavelength + intensidad).
     Devuelve el valor numerico del area a usar en el calculo."""
-    mode = st.radio(
-        f"{label}: origen del dato", ["Manual", "Subir espectro"],
-        key=f"{key_prefix}_mode", horizontal=True,
-    )
+    with st.container(border=True):
+        st.markdown(f"**{label}**")
+        mode = st.radio(
+            "Origen del dato", ["Manual", "Subir espectro"],
+            key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
+        )
 
-    if mode == "Manual":
-        return st.number_input(label, min_value=min_value, value=default_value,
-                               format="%.6f", key=f"{key_prefix}_manual")
+        if mode == "Manual":
+            return st.number_input(label, min_value=min_value, value=default_value,
+                                   format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
 
-    f = st.file_uploader(f"Espectro para: {label}", type=["csv", "xlsx"], key=f"{key_prefix}_file")
-    if f is None:
-        st.info("Sube un archivo CSV o XLSX para calcular el area automaticamente.")
-        return default_value
+        f = st.file_uploader("Espectro (CSV o XLSX)", type=["csv", "xlsx"],
+                             key=f"{key_prefix}_file", label_visibility="collapsed")
+        if f is None:
+            st.caption("Sube un archivo con columnas de longitud de onda e intensidad.")
+            return default_value
 
-    try:
-        raw = f.getvalue()
-        if f.name.lower().endswith(".xlsx"):
-            sheets = list_excel_sheets(raw)
-            sheet = st.selectbox("Hoja", options=sheets, key=f"{key_prefix}_sheet")
-            df = load_excel_sheet(raw, sheet)
-        else:
-            df = load_csv_df(raw)
+        try:
+            raw = f.getvalue()
+            if f.name.lower().endswith(".xlsx"):
+                sheets = list_excel_sheets(raw)
+                sheet = st.selectbox("Hoja", options=sheets, key=f"{key_prefix}_sheet")
+                df = load_excel_sheet(raw, sheet)
+            else:
+                df = load_csv_df(raw)
 
-        wl_guess, int_guess = guess_columns(df)
-        cols = list(df.columns)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            wl_col = st.selectbox("Columna wavelength", options=cols,
-                                  index=cols.index(wl_guess) if wl_guess in cols else 0,
-                                  key=f"{key_prefix}_wlcol")
-        with c2:
-            int_col = st.selectbox("Columna intensidad", options=cols,
-                                   index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
-                                   key=f"{key_prefix}_intcol")
-        with c3:
-            normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"],
-                                     key=f"{key_prefix}_norm")
+            wl_guess, int_guess = guess_columns(df)
+            cols = list(df.columns)
+            with st.expander("Ajustar columnas, rango y normalizacion", expanded=False):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    wl_col = st.selectbox("Columna wavelength", options=cols,
+                                          index=cols.index(wl_guess) if wl_guess in cols else 0,
+                                          key=f"{key_prefix}_wlcol")
+                with c2:
+                    int_col = st.selectbox("Columna intensidad", options=cols,
+                                           index=cols.index(int_guess) if int_guess in cols else min(1, len(cols) - 1),
+                                           key=f"{key_prefix}_intcol")
+                with c3:
+                    normalize = st.selectbox("Normalizacion", options=["None", "Max = 1", "Area = 1"],
+                                             key=f"{key_prefix}_norm")
+                c4, c5 = st.columns(2)
+                with c4:
+                    wl_min = st.number_input("Min nm", min_value=100, max_value=10000, value=200, key=f"{key_prefix}_wlmin")
+                with c5:
+                    wl_max = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"{key_prefix}_wlmax")
 
-        c4, c5 = st.columns(2)
-        with c4:
-            wl_min = st.number_input("Min nm", min_value=100, max_value=10000, value=200, key=f"{key_prefix}_wlmin")
-        with c5:
-            wl_max = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"{key_prefix}_wlmax")
+            wl, intensity = filter_and_normalize(df[wl_col], df[int_col], wl_min, wl_max, normalize)
+            peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
 
-        wl, intensity = filter_and_normalize(df[wl_col], df[int_col], wl_min, wl_max, normalize)
-        peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
+            fig, ax = plt.subplots(figsize=(4, 2.0))
+            ax.plot(wl, intensity, color="#1f77b4", linewidth=1.4)
+            ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
+            ax.set_ylabel("Intensidad", fontsize=8)
+            ax.tick_params(labelsize=7)
+            ax.grid(alpha=0.25)
+            show_and_close(fig)
 
-        fig, ax = plt.subplots(figsize=(4, 2.2))
-        ax.plot(wl, intensity, color="#1f77b4", linewidth=1.5)
-        ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
-        ax.set_ylabel("Intensidad", fontsize=8)
-        ax.tick_params(labelsize=7)
-        ax.grid(alpha=0.25)
-        show_and_close(fig)
+            st.success(f"Area integrada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
+            return area
+        except Exception as e:
+            st.error(f"No se pudo calcular el area a partir del espectro: {e}")
+            return default_value
 
-        st.success(f"Area integrada calculada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
-        return area
-    except Exception as e:
-        st.error(f"No se pudo calcular el area a partir del espectro: {e}")
-        return default_value
+
+def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_default=350.0):
+    """Campo de 'absorbancia' reutilizable: manual, o leida automaticamente
+    de un espectro de absorcion o de reflectancia difusa (convertida con la
+    funcion de Kubelka-Munk) a la longitud de onda de excitacion. Devuelve
+    el valor numerico a usar en el calculo de rendimiento cuantico."""
+    with st.container(border=True):
+        st.markdown(f"**{label}**")
+        mode = st.radio(
+            "Origen del dato", ["Manual", "Subir espectro"],
+            key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
+        )
+
+        if mode == "Manual":
+            return st.number_input(label, min_value=0.000001, value=default_value,
+                                   format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
+
+        f = st.file_uploader("Espectro de absorcion o reflectancia (CSV o XLSX)", type=["csv", "xlsx"],
+                             key=f"{key_prefix}_file", label_visibility="collapsed")
+        if f is None:
+            st.caption("Sube un archivo con columnas de longitud de onda y absorbancia/reflectancia.")
+            return default_value
+
+        try:
+            raw = f.getvalue()
+            if f.name.lower().endswith(".xlsx"):
+                sheets = list_excel_sheets(raw)
+                sheet = st.selectbox("Hoja", options=sheets, key=f"{key_prefix}_sheet")
+                df = load_excel_sheet(raw, sheet)
+            else:
+                df = load_csv_df(raw)
+
+            wl_guess, val_guess = guess_columns(df)
+            cols = list(df.columns)
+            with st.expander("Ajustar columnas y tipo de espectro", expanded=False):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    wl_col = st.selectbox("Columna wavelength", options=cols,
+                                          index=cols.index(wl_guess) if wl_guess in cols else 0,
+                                          key=f"{key_prefix}_wlcol")
+                with c2:
+                    val_col = st.selectbox("Columna de valor", options=cols,
+                                           index=cols.index(val_guess) if val_guess in cols else min(1, len(cols) - 1),
+                                           key=f"{key_prefix}_valcol")
+                with c3:
+                    spectrum_kind = st.selectbox(
+                        "Tipo de espectro",
+                        options=["Absorbancia", "Reflectancia (%)", "Reflectancia (fraccion 0-1)"],
+                        key=f"{key_prefix}_kind",
+                    )
+                exc_wl = st.number_input("Longitud de onda de excitacion (nm)", min_value=100.0, max_value=2000.0,
+                                         value=excitation_wl_default, format="%.1f", key=f"{key_prefix}_excwl")
+
+            wl = to_numeric_series(df[wl_col]).to_numpy(dtype=float)
+            val = to_numeric_series(df[val_col]).to_numpy(dtype=float)
+            mask = np.isfinite(wl) & np.isfinite(val)
+            wl, val = wl[mask], val[mask]
+            order = np.argsort(wl)
+            wl, val = wl[order], val[order]
+            if len(wl) < 2:
+                raise ValueError("El espectro no tiene suficientes puntos numericos validos.")
+
+            raw_value = float(np.interp(exc_wl, wl, val))
+
+            fig, ax = plt.subplots(figsize=(4, 2.0))
+            ax.plot(wl, val, color="#d62728", linewidth=1.4)
+            ax.axvline(exc_wl, color="#6b7280", linestyle="--", linewidth=1)
+            ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
+            ax.set_ylabel(spectrum_kind, fontsize=8)
+            ax.tick_params(labelsize=7)
+            ax.grid(alpha=0.25)
+            show_and_close(fig)
+
+            if spectrum_kind == "Absorbancia":
+                absorbance = raw_value
+                st.success(f"Absorbancia a {exc_wl:.1f} nm: {absorbance:.6g}")
+            else:
+                R = raw_value / 100.0 if spectrum_kind == "Reflectancia (%)" else raw_value
+                R = min(max(R, 1e-6), 0.999999)
+                absorbance = ((1 - R) ** 2) / (2 * R)
+                st.success(
+                    f"Reflectancia a {exc_wl:.1f} nm: {R:.4f} \u2192 F(R) de Kubelka-Munk = {absorbance:.6g} "
+                    "(se usa en lugar de la absorbancia para muestras solidas)"
+                )
+                st.caption(
+                    "F(R) = (1-R)\u00b2 / (2R). Para reflectancia difusa esta funcion cumple el mismo papel "
+                    "que la absorbancia en la ecuacion de rendimiento cuantico relativo."
+                )
+            return absorbance
+        except Exception as e:
+            st.error(f"No se pudo obtener la absorbancia a partir del espectro: {e}")
+            return default_value
 
 
 def _docx_report_header(doc, title, timestamp, intro_text):
@@ -1405,14 +1501,14 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         q1, q2 = st.columns(2)
         with q1:
             st.markdown("### Muestra")
-            sample_area = area_input("Area integrada muestra", "rel_sample_area", default_value=1.0)
-            sample_abs = st.number_input("Absorbancia muestra", min_value=0.000001, value=0.05, format="%.6f", key="rel_sample_abs")
+            sample_area = area_input("Area integrada de emision (muestra)", "rel_sample_area", default_value=1.0)
+            sample_abs = absorbance_input("Absorbancia/reflectancia a la excitacion (muestra)", "rel_sample_abs", default_value=0.05)
             sample_n = st.number_input("Indice refraccion muestra", min_value=1.0, value=1.333, format="%.6f", key="rel_sample_n")
         with q2:
             st.markdown("### Referencia")
             ref_phi = st.number_input("Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi")
-            ref_area = area_input("Area integrada referencia", "rel_ref_area", default_value=1.0)
-            ref_abs = st.number_input("Absorbancia referencia", min_value=0.000001, value=0.05, format="%.6f", key="rel_ref_abs")
+            ref_area = area_input("Area integrada de emision (referencia)", "rel_ref_area", default_value=1.0)
+            ref_abs = absorbance_input("Absorbancia/reflectancia a la excitacion (referencia)", "rel_ref_abs", default_value=0.05)
             ref_n = st.number_input("Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n")
 
         rel_data = {
