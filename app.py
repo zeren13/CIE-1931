@@ -9,6 +9,7 @@ import matplotlib
 from matplotlib.font_manager import FontProperties
 
 import colour
+import plotly.graph_objects as go
 from colour import MSDS_CMFS
 
 # Opcional: Savitzky-Golay si SciPy esta instalado
@@ -2835,6 +2836,15 @@ if st.session_state["active_page"] == "Visor de espectros":
 
                 wl, intensity = filter_and_normalize(df_view[wl_col], df_view[int_col], wl_min_v, wl_max_v, normalize)
                 peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
+
+                send_key = f"viewer_send_cie_{i}"
+                if st.button(f"\U0001F3A8 Enviar '{label}' a Analisis CIE 1931", key=send_key):
+                    transfer_df = pd.DataFrame({"wavelength": wl, "intensity": intensity})
+                    queue = st.session_state.get("viewer_to_cie", [])
+                    queue.append({"name": f"Visor: {label}", "df": transfer_df})
+                    st.session_state["viewer_to_cie"] = queue
+                    go_to_page("Analisis CIE 1931")
+
                 viewer_spectra.append({
                     "label": label,
                     "wl": wl,
@@ -2856,17 +2866,24 @@ if st.session_state["active_page"] == "Visor de espectros":
     if viewer_spectra:
         left, right = st.columns([2, 1], gap="large")
         with left:
-            fig_v, ax_v = plt.subplots(figsize=(8, 4.8))
+            fig_v = go.Figure()
             for s in viewer_spectra:
-                ax_v.plot(s["wl"], s["intensity"], label=s["label"], color=s["color"], linewidth=1.8)
-            ax_v.set_xlabel("Longitud de onda (nm)")
-            ax_v.set_ylabel("Intensidad / Absorbancia")
-            ax_v.grid(alpha=0.25)
-            try:
-                ax_v.legend(fontsize=8, loc="best")
-            except Exception:
-                pass
-            show_and_close(fig_v)
+                fig_v.add_trace(go.Scatter(
+                    x=s["wl"], y=s["intensity"], mode="lines", name=s["label"],
+                    line=dict(color=s["color"], width=2),
+                ))
+            fig_v.update_layout(
+                xaxis_title="Longitud de onda (nm)",
+                yaxis_title="Intensidad / Absorbancia",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                margin=dict(l=10, r=10, t=40, b=10),
+                height=480,
+            )
+            fig_v.update_xaxes(showgrid=True, gridcolor="#e5e7eb")
+            fig_v.update_yaxes(showgrid=True, gridcolor="#e5e7eb")
+            st.plotly_chart(fig_v, use_container_width=True)
+            st.caption("Grafico interactivo: acerca con scroll/pellizco, arrastra para desplazar, pasa el cursor para leer valores exactos.")
         with right:
             st.markdown("### Resumen")
             viewer_df = pd.DataFrame(viewer_rows)
@@ -2874,6 +2891,20 @@ if st.session_state["active_page"] == "Visor de espectros":
             csv_viewer = io.StringIO()
             viewer_df.to_csv(csv_viewer, index=False)
             st.download_button("Descargar resumen CSV", data=csv_viewer.getvalue(), file_name="spectra_viewer_summary.csv", mime="text/csv")
+
+            combined_rows = []
+            for s in viewer_spectra:
+                for wl_val, int_val in zip(s["wl"], s["intensity"]):
+                    combined_rows.append({"Etiqueta": s["label"], "wavelength_nm": wl_val, "intensity": int_val})
+            combined_df = pd.DataFrame(combined_rows)
+            csv_combined = io.StringIO()
+            combined_df.to_csv(csv_combined, index=False)
+            st.download_button(
+                "Descargar espectros procesados (CSV)",
+                data=csv_combined.getvalue(),
+                file_name="spectra_viewer_procesados.csv",
+                mime="text/csv",
+            )
     else:
         st.info("Sube uno o mas espectros para iniciar la visualizacion.")
     st.stop()
@@ -3275,6 +3306,14 @@ if xlsx_files:
                 datasets.append({"id": f"xlsx_{j}_{k}", "name": f"{f.name} - {sh}", "df": df})
             except Exception as e:
                 st.error(f"Error al leer {f.name} | hoja {sh}: {e}")
+
+_viewer_queue = st.session_state.get("viewer_to_cie", [])
+if _viewer_queue:
+    for v, item in enumerate(_viewer_queue):
+        datasets.append({"id": f"viewer_{v}", "name": item["name"], "df": item["df"]})
+    if st.button("\U0001F5D1\uFE0F Quitar muestras enviadas desde el Visor"):
+        st.session_state["viewer_to_cie"] = []
+        st.rerun()
 
 # ----------------- Configuracion por dataset -----------------
 def init_cfg(ds):
