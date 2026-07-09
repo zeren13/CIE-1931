@@ -1041,6 +1041,690 @@ def _render_spectrum_result(wl, intensity):
     return area
 
 
+# ------------------------------------------------------------------
+# Dataset de referencia embebido: coeficiente de extincion molar real de
+# sulfato de quinina en H2SO4 0.5 M (Irvin & Irvin, 1948; digitalizado por
+# PhotochemCAD 2.1a / Scott Prahl). Rango 255.5-420 nm: cubre toda la banda
+# de absorcion real; se omite el resto (420-720 nm) porque son valores de
+# ruido de fondo cercanos a cero, sin senal de absorcion real.
+# Fuente: https://omlc.org/spectra/PhotochemCAD/html/081.html
+# ------------------------------------------------------------------
+_QUININE_SULFATE_ABS_TXT = """255.5	13372
+255.75	13080
+256	12992
+256.25	13107
+256.5	12924
+256.75	12870
+257	12852
+257.25	12786
+257.5	12621
+257.75	12359
+258	12135
+258.25	11970
+258.5	11734
+258.75	11357
+259	10790
+259.25	10368
+259.5	9834
+259.75	9213
+260	8636
+260.25	8051
+260.5	7466
+260.75	6944
+261	6421
+261.25	5949
+261.5	5448
+261.75	5036
+262	4607
+262.25	4215
+262.5	3867
+262.75	3520
+263	3234
+263.25	2963
+263.5	2717
+263.75	2481
+264	2283
+264.25	2090
+264.5	1917
+264.75	1772
+265	1626
+265.25	1512
+265.5	1401
+265.75	1306
+266	1226
+266.25	1148
+266.5	1075
+266.75	1020
+267	962
+267.25	934
+267.5	894
+267.75	858
+268	827
+268.25	802
+268.5	782
+268.75	768
+269	753
+269.25	743
+269.5	737
+269.75	728
+270	723
+270.25	725
+270.5	721
+270.75	720
+271	719
+271.25	720
+271.5	726
+271.75	717
+272	734
+272.25	738
+272.5	750
+272.75	759
+273	765
+273.25	769
+273.5	776
+273.75	789
+274	795
+274.25	803
+274.5	809
+274.75	808
+275	838
+275.25	851
+275.5	861
+275.75	879
+276	888
+276.25	906
+276.5	912
+276.75	928
+277	939
+277.25	950
+277.5	958
+277.75	989
+278	992
+278.25	998
+278.5	1007
+278.75	1043
+279	1049
+279.25	1059
+279.5	1073
+279.75	1085
+280	1096
+280.25	1117
+280.5	1132
+280.75	1145
+281	1165
+281.25	1184
+281.5	1201
+281.75	1228
+282	1232
+282.25	1250
+282.5	1269
+282.75	1274
+283	1298
+283.25	1315
+283.5	1341
+283.75	1355
+284	1372
+284.25	1397
+284.5	1412
+284.75	1429
+285	1440
+285.25	1466
+285.5	1487
+285.75	1502
+286	1520
+286.25	1546
+286.5	1563
+286.75	1581
+287	1608
+287.25	1635
+287.5	1652
+287.75	1674
+288	1685
+288.25	1721
+288.5	1737
+288.75	1760
+289	1784
+289.25	1803
+289.5	1835
+289.75	1859
+290	1877
+290.25	1903
+290.5	1931
+290.75	1947
+291	1973
+291.25	2008
+291.5	2028
+291.75	2061
+292	2096
+292.25	2113
+292.5	2141
+292.75	2161
+293	2201
+293.25	2221
+293.5	2258
+293.75	2270
+294	2301
+294.25	2324
+294.5	2354
+294.75	2365
+295	2394
+295.25	2419
+295.5	2460
+295.75	2491
+296	2532
+296.25	2542
+296.5	2579
+296.75	2602
+297	2643
+297.25	2687
+297.5	2719
+297.75	2742
+298	2773
+298.25	2820
+298.5	2863
+298.75	2875
+299	2913
+299.25	2955
+299.5	2978
+299.75	3008
+300	3042
+300.25	3063
+300.5	3095
+300.75	3157
+301	3176
+301.25	3205
+301.5	3255
+301.75	3286
+302	3321
+302.25	3351
+302.5	3381
+302.75	3410
+303	3449
+303.25	3469
+303.5	3498
+303.75	3539
+304	3560
+304.25	3600
+304.5	3626
+304.75	3676
+305	3698
+305.25	3722
+305.5	3738
+305.75	3783
+306	3820
+306.25	3833
+306.5	3877
+306.75	3904
+307	3941
+307.25	3978
+307.5	3992
+307.75	4021
+308	4035
+308.25	4081
+308.5	4117
+308.75	4126
+309	4159
+309.25	4181
+309.5	4199
+309.75	4113
+310	4155
+310.25	4157
+310.5	4196
+310.75	4259
+311	4259
+311.25	4264
+311.5	4301
+311.75	4343
+312	4331
+312.25	4371
+312.5	4377
+312.75	4371
+313	4450
+313.25	4459
+313.5	4471
+313.75	4426
+314	4478
+314.25	4506
+314.5	4522
+314.75	4529
+315	4580
+315.25	4562
+315.5	4572
+315.75	4601
+316	4608
+316.25	4547
+316.5	4560
+316.75	4556
+317	4603
+317.25	4611
+317.5	4570
+317.75	4600
+318	4575
+318.25	4576
+318.5	4568
+318.75	4600
+319	4553
+319.25	4544
+319.5	4555
+319.75	4539
+320	4526
+320.25	4572
+320.5	4528
+320.75	4503
+321	4508
+321.25	4503
+321.5	4512
+321.75	4456
+322	4478
+322.25	4495
+322.5	4485
+322.75	4466
+323	4435
+323.25	4415
+323.5	4395
+323.75	4413
+324	4380
+324.25	4431
+324.5	4428
+324.75	4382
+325	4455
+325.25	4416
+325.5	4371
+325.75	4367
+326	4418
+326.25	4445
+326.5	4450
+326.75	4406
+327	4409
+327.25	4418
+327.5	4424
+327.75	4471
+328	4475
+328.25	4490
+328.5	4458
+328.75	4505
+329	4511
+329.25	4531
+329.5	4551
+329.75	4588
+330	4612
+330.25	4595
+330.5	4594
+330.75	4615
+331	4622
+331.25	4676
+331.5	4685
+331.75	4690
+332	4712
+332.25	4752
+332.5	4775
+332.75	4782
+333	4798
+333.25	4817
+333.5	4894
+333.75	4920
+334	4893
+334.25	4928
+334.5	4990
+334.75	4947
+335	4934
+335.25	4994
+335.5	5021
+335.75	5086
+336	5098
+336.25	5080
+336.5	5094
+336.75	5102
+337	5150
+337.25	5170
+337.5	5170
+337.75	5222
+338	5278
+338.25	5246
+338.5	5315
+338.75	5241
+339	5372
+339.25	5335
+339.5	5377
+339.75	5381
+340	5422
+340.25	5411
+340.5	5437
+340.75	5507
+341	5461
+341.25	5529
+341.5	5507
+341.75	5544
+342	5560
+342.25	5550
+342.5	5556
+342.75	5543
+343	5597
+343.25	5604
+343.5	5583
+343.75	5599
+344	5698
+344.25	5656
+344.5	5667
+344.75	5661
+345	5671
+345.25	5647
+345.5	5650
+345.75	5654
+346	5691
+346.25	5689
+346.5	5633
+346.75	5643
+347	5689
+347.25	5673
+347.5	5700
+347.75	5674
+348	5666
+348.25	5666
+348.5	5692
+348.75	5648
+349	5677
+349.25	5626
+349.5	5641
+349.75	5652
+350	5572
+350.25	5625
+350.5	5613
+350.75	5581
+351	5577
+351.25	5566
+351.5	5533
+351.75	5575
+352	5506
+352.25	5473
+352.5	5480
+352.75	5465
+353	5435
+353.25	5388
+353.5	5399
+353.75	5354
+354	5335
+354.25	5325
+354.5	5316
+354.75	5277
+355	5238
+355.25	5221
+355.5	5198
+355.75	5143
+356	5136
+356.25	5092
+356.5	5032
+356.75	5029
+357	4995
+357.25	4983
+357.5	4945
+357.75	4887
+358	4849
+358.25	4802
+358.5	4814
+358.75	4760
+359	4751
+359.25	4698
+359.5	4648
+359.75	4602
+360	4556
+360.25	4545
+360.5	4487
+360.75	4453
+361	4405
+361.25	4363
+361.5	4327
+361.75	4291
+362	4251
+362.25	4169
+362.5	4150
+362.75	4088
+363	4053
+363.25	4026
+363.5	3965
+363.75	3923
+364	3870
+364.25	3817
+364.5	3778
+364.75	3754
+365	3691
+365.25	3659
+365.5	3587
+365.75	3547
+366	3513
+366.25	3438
+366.5	3384
+366.75	3366
+367	3297
+367.25	3245
+367.5	3226
+367.75	3165
+368	3095
+368.25	3061
+368.5	2993
+368.75	2956
+369	2919
+369.25	2891
+369.5	2841
+369.75	2781
+370	2727
+370.25	2661
+370.5	2622
+370.75	2575
+371	2523
+371.25	2497
+371.5	2447
+371.75	2397
+372	2367
+372.25	2306
+372.5	2273
+372.75	2236
+373	2189
+373.25	2172
+373.5	2122
+373.75	2086
+374	2051
+374.25	2012
+374.5	1984
+374.75	1981
+375	1958
+375.25	1894
+375.5	1860
+375.75	1819
+376	1747
+376.25	1714
+376.5	1659
+376.75	1620
+377	1604
+377.25	1565
+377.5	1541
+377.75	1476
+378	1456
+378.25	1423
+378.5	1373
+378.75	1358
+379	1317
+379.25	1287
+379.5	1267
+379.75	1240
+380	1204
+380.25	1181
+380.5	1149
+380.75	1128
+381	1100
+381.25	1068
+381.5	1028
+381.75	1002
+382	975
+382.25	948
+382.5	946
+382.75	911
+383	882
+383.25	858
+383.5	835
+383.75	821
+384	787
+384.25	770
+384.5	761
+384.75	725
+385	712
+385.25	681
+385.5	671
+385.75	667
+386	640
+386.25	607
+386.5	595
+386.75	599
+387	570
+387.25	552
+387.5	529
+387.75	514
+388	496
+388.25	498
+388.5	479
+388.75	462
+389	440
+389.25	441
+389.5	425
+389.75	410
+390	407
+390.25	388
+390.5	369
+390.75	360
+391	356
+391.25	346
+391.5	335
+391.75	327
+392	316
+392.25	296
+392.5	285
+392.75	287
+393	279
+393.25	265
+393.5	250
+393.75	243
+394	250
+394.25	245
+394.5	229
+394.75	216
+395	220
+395.25	203
+395.5	191
+395.75	181
+396	188
+396.25	181
+396.5	166
+396.75	155
+397	158
+397.25	161
+397.5	148
+397.75	135
+398	136
+398.25	130
+398.5	134
+398.75	122
+399	134
+399.25	120
+399.5	112
+399.75	105
+400	114
+400.25	105
+400.5	94
+400.75	99
+401	94
+401.25	88
+401.5	86
+401.75	83
+402	85
+402.25	87
+402.5	73
+402.75	76
+403	69
+403.25	75
+403.5	69
+403.75	58
+404	76
+404.25	56
+404.5	53
+404.75	66
+405	57
+405.25	48
+405.5	49
+405.75	48
+406	46
+406.25	47
+406.5	50
+406.75	40
+407	48
+407.25	48
+407.5	39
+407.75	45
+408	38
+408.25	28
+408.5	39
+408.75	34
+409	26
+409.25	19
+409.5	19
+409.75	25
+410	29
+410.25	20
+410.5	31
+410.75	20
+411	22
+411.25	19
+411.5	13
+411.75	15
+412	15
+412.25	21
+412.5	23
+412.75	19
+413	19
+413.25	14
+413.5	12
+413.75	21
+414	17
+414.25	11
+414.5	11
+414.75	6
+415	13
+415.25	16
+415.5	14
+415.75	10
+416	23
+416.25	7
+416.5	8
+416.75	8
+417	11
+417.25	12
+417.5	4
+417.75	11
+418	0
+418.25	7
+418.5	3
+418.75	12
+419	15
+419.25	8
+419.5	7
+419.75	2
+420	6
+"""
+
+_qs_abs_df = pd.read_csv(io.StringIO(_QUININE_SULFATE_ABS_TXT), sep="\t", header=None, names=["wavelength", "epsilon"])
+QUININE_SULFATE_ABS_EXAMPLE = {
+    "option_label": "Usar dato real (sulfato de quinina, PhotochemCAD)",
+    "wl": _qs_abs_df["wavelength"].to_numpy(dtype=float),
+    "epsilon": _qs_abs_df["epsilon"].to_numpy(dtype=float),
+    "citation": (
+        "Coeficiente de extincion molar real de sulfato de quinina en H\u2082SO\u2084 0.5 M "
+        "(Irvin \u0026 Irvin, 1948; \u03b5=5700 M\u207b\u00b9cm\u207b\u00b9 a 347.5 nm). "
+        "Digitalizado por PhotochemCAD 2.1a (Du et al. 1998; Dixon et al. 2005), "
+        "reprocesado por S. Prahl, Oregon Medical Laser Center. Rango incluido: 255.5-420 nm."
+    ),
+    "url": "https://omlc.org/spectra/PhotochemCAD/html/081.html",
+}
+
+
 def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=None, embedded_example=None):
     """Campo de 'area integrada' reutilizable: manual, calculada subiendo un
     espectro propio, o (si se provee embedded_example) usando un dataset de
@@ -1114,23 +1798,81 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=No
             return default_value
 
 
-def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_default=350.0, help_text=None):
-    """Campo de 'absorbancia' reutilizable: manual, o leida automaticamente
-    de un espectro de absorcion o de reflectancia difusa (convertida con la
-    funcion de Kubelka-Munk) a la longitud de onda de excitacion. Devuelve
-    el valor numerico a usar en el calculo de rendimiento cuantico."""
+def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_default=350.0, help_text=None, embedded_example=None):
+    """Campo de 'absorbancia' reutilizable: manual, leida de un espectro de
+    absorcion/reflectancia propio, o (si se provee embedded_example) calculada
+    a partir de un coeficiente de extincion molar real ya incluido en la app
+    (requiere que el usuario indique la concentracion y el paso optico usados
+    en su propia medicion). Devuelve el valor a usar en el calculo."""
     with st.container(border=True):
         st.markdown(f"**{label}**")
         if help_text:
             st.caption(help_text)
+
+        options = ["Manual", "Subir espectro"]
+        if embedded_example:
+            options.append(embedded_example["option_label"])
         mode = st.radio(
-            "Origen del dato", ["Manual", "Subir espectro"],
+            "Origen del dato", options,
             key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
         )
 
         if mode == "Manual":
             return st.number_input(label, min_value=0.000001, value=default_value,
                                    format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
+
+        if embedded_example and mode == embedded_example["option_label"]:
+            st.caption(embedded_example["citation"])
+            st.link_button("Ver la fuente original", embedded_example["url"])
+            st.caption(
+                "El coeficiente de extincion molar (\u03b5) es un dato real y publicado, pero la "
+                "absorbancia final depende de la concentracion y el paso optico de tu propia "
+                "medicion (A = \u03b5\u00b7c\u00b7l), que no vienen publicados junto al espectro. "
+                "Ingresalos abajo para completar el calculo."
+            )
+            try:
+                wl = embedded_example["wl"]
+                eps = embedded_example["epsilon"]
+                exc_wl = st.number_input(
+                    "Longitud de onda de excitacion (nm)",
+                    min_value=float(wl.min()), max_value=float(wl.max()),
+                    value=float(np.clip(excitation_wl_default, wl.min(), wl.max())),
+                    format="%.1f", key=f"{key_prefix}_exwl_embed",
+                )
+                c1, c2 = st.columns(2)
+                with c1:
+                    conc = st.number_input("Concentracion (mol/L)", min_value=1e-9, value=1e-5,
+                                           format="%.3e", key=f"{key_prefix}_conc_embed")
+                with c2:
+                    path_len = st.number_input("Paso optico (cm)", min_value=0.01, value=1.0,
+                                               format="%.3f", key=f"{key_prefix}_path_embed")
+
+                epsilon_at_wl = float(np.interp(exc_wl, wl, eps))
+                absorbance = epsilon_at_wl * conc * path_len
+
+                fig, ax = plt.subplots(figsize=(4, 2.0))
+                ax.plot(wl, eps, color="#d62728", linewidth=1.4)
+                ax.axvline(exc_wl, color="#6b7280", linestyle="--", linewidth=1)
+                ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
+                ax.set_ylabel("\u03b5 (M\u207b\u00b9cm\u207b\u00b9)", fontsize=8)
+                ax.tick_params(labelsize=7)
+                ax.grid(alpha=0.25)
+                show_and_close(fig)
+
+                st.success(
+                    f"\u03b5({exc_wl:.1f} nm) = {epsilon_at_wl:.6g} M\u207b\u00b9cm\u207b\u00b9  \u2192  "
+                    f"A = \u03b5\u00b7c\u00b7l = {epsilon_at_wl:.6g} \u00d7 {conc:.3e} \u00d7 {path_len:.3g} "
+                    f"= {absorbance:.6g}"
+                )
+                if absorbance >= 0.1:
+                    st.warning(
+                        "Esta absorbancia es \u2265 0.1: reduce la concentracion para evitar "
+                        "efectos de filtro interno en el rendimiento cuantico relativo."
+                    )
+                return absorbance
+            except Exception as e:
+                st.error(f"No se pudo calcular la absorbancia a partir de \u03b5: {e}")
+                return default_value
 
         f = st.file_uploader("Espectro de absorcion o reflectancia (CSV o XLSX)", type=["csv", "xlsx"],
                              key=f"{key_prefix}_file", label_visibility="collapsed")
@@ -2191,6 +2933,7 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
             ref_abs = absorbance_input(
                 "Absorbancia/reflectancia a la excitacion (referencia)", "rel_ref_abs", default_value=0.05,
                 help_text="Aref: absorbancia de la referencia a la misma longitud de onda de excitacion.",
+                embedded_example=QUININE_SULFATE_ABS_EXAMPLE,
             )
             ref_n = st.number_input(
                 "Indice refraccion referencia", min_value=1.0, value=1.333, format="%.6f", key="rel_ref_n",
