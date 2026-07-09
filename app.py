@@ -1558,19 +1558,17 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
 
         with col_in:
             st.markdown("#### Datos de entrada")
-            if st.button("Cargar ejemplo (sulfato de quinina como referencia)", key="rel_load_example", use_container_width=True):
-                st.session_state["rel_sample_area_mode"] = "Manual"
-                st.session_state["rel_sample_area_manual"] = 0.72
-                st.session_state["rel_sample_abs_mode"] = "Manual"
-                st.session_state["rel_sample_abs_manual"] = 0.045
-                st.session_state["rel_sample_n"] = 1.333
-                st.session_state["rel_ref_phi"] = 0.546
-                st.session_state["rel_ref_area_mode"] = "Manual"
-                st.session_state["rel_ref_area_manual"] = 1.0
-                st.session_state["rel_ref_abs_mode"] = "Manual"
-                st.session_state["rel_ref_abs_manual"] = 0.045
-                st.session_state["rel_ref_n"] = 1.333
-                st.rerun()
+            st.link_button(
+                "\U0001F517 Descargar espectro real de sulfato de quinina (PhotochemCAD)",
+                "https://omlc.org/spectra/PhotochemCAD/html/081.html",
+                use_container_width=True,
+            )
+            st.caption(
+                "Espectro de emision digitalizado real (excitacion 310 nm, en H\u2082SO\u2084 0.5 M, "
+                "\u03a6ref = 0.546, Eaton 1988) de la base de datos PhotochemCAD. Guarda el archivo "
+                "como CSV y subelo abajo, en 'Area integrada de emision (referencia)' \u2192 "
+                "'Subir espectro', para que la app calcule el area exactamente igual que con tus propios datos."
+            )
 
             st.markdown("##### Muestra")
             sample_area = area_input(
