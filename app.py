@@ -438,22 +438,638 @@ def show_and_close(fig):
     plt.close(fig)
 
 
-def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=None):
-    """Campo de 'area integrada' reutilizable: manual o calculada
-    automaticamente subiendo un espectro (wavelength + intensidad).
-    Devuelve el valor numerico del area a usar en el calculo."""
+# ------------------------------------------------------------------
+# Dataset de referencia embebido: espectro de emision real de sulfato de
+# quinina en H2SO4 0.5 M, excitacion 310 nm, Phi_ref = 0.546 (Eaton, 1988).
+# Datos digitalizados de PhotochemCAD 2.1a (Du et al. 1998; Dixon et al. 2005),
+# reprocesados por Scott Prahl (Oregon Medical Laser Center). Se incluyen tal
+# cual para que el usuario pueda usarlos como referencia real sin tener que
+# descargarlos y volverlos a subir.
+# Fuente: https://omlc.org/spectra/PhotochemCAD/html/081.html
+# ------------------------------------------------------------------
+_QUININE_SULFATE_EMS_TXT = """320	2281
+320.5	2181
+321	2175
+321.5	2133
+322	2121
+322.5	2030
+323	2084
+323.5	2080
+324	1973
+324.5	2075
+325	2125
+325.5	2131
+326	2124
+326.5	2075
+327	2091
+327.5	2031
+328	1953
+328.5	2044
+329	2184
+329.5	1955
+330	2073
+330.5	1997
+331	1981
+331.5	1991
+332	2019
+332.5	2037
+333	2071
+333.5	1949
+334	2036
+334.5	2016
+335	1977
+335.5	2027
+336	2020
+336.5	2068
+337	2039
+337.5	2201
+338	2251
+338.5	2384
+339	2440
+339.5	2927
+340	3059
+340.5	3699
+341	4179
+341.5	5055
+342	5745
+342.5	6684
+343	7479
+343.5	8360
+344	9407
+344.5	9840
+345	10201
+345.5	10390
+346	10544
+346.5	10122
+347	9839
+347.5	9079
+348	8229
+348.5	7116
+349	6263
+349.5	5233
+350	4554
+350.5	3830
+351	3333
+351.5	2705
+352	2610
+352.5	2399
+353	2221
+353.5	2253
+354	2097
+354.5	2263
+355	2218
+355.5	2240
+356	2158
+356.5	2242
+357	2144
+357.5	2198
+358	2337
+358.5	2235
+359	2227
+359.5	2333
+360	2356
+360.5	2563
+361	2444
+361.5	2683
+362	2611
+362.5	2863
+363	2955
+363.5	3008
+364	3142
+364.5	3412
+365	3549
+365.5	3837
+366	4128
+366.5	4329
+367	4667
+367.5	5038
+368	5238
+368.5	5752
+369	5946
+369.5	6745
+370	7139
+370.5	7651
+371	8374
+371.5	9226
+372	10062
+372.5	11082
+373	11862
+373.5	12914
+374	13706
+374.5	15330
+375	16082
+375.5	18339
+376	19429
+376.5	21674
+377	23419
+377.5	25898
+378	27814
+378.5	30838
+379	32688
+379.5	36923
+380	38961
+380.5	42568
+381	45621
+381.5	50937
+382	53543
+382.5	59270
+383	63413
+383.5	70228
+384	74002
+384.5	80896
+385	85941
+385.5	95808
+386	100075
+386.5	109297
+387	115835
+387.5	127700
+388	132832
+388.5	144096
+389	152316
+389.5	165122
+390	172334
+390.5	184146
+391	191923
+391.5	206468
+392	215380
+392.5	229522
+393	238909
+393.5	256452
+394	264660
+394.5	280807
+395	292369
+395.5	310903
+396	321926
+396.5	337232
+397	350524
+397.5	370166
+398	381733
+398.5	400767
+399	413848
+399.5	437790
+400	451603
+400.5	471147
+401	483912
+401.5	511461
+402	523055
+402.5	545215
+403	560394
+403.5	589495
+404	604237
+404.5	627045
+405	643460
+405.5	678311
+406	692439
+406.5	722875
+407	742917
+407.5	778883
+408	792766
+408.5	821049
+409	846161
+409.5	880305
+410	895378
+410.5	926545
+411	947605
+411.5	980451
+412	995351
+412.5	1021701
+413	1041357
+413.5	1074101
+414	1088811
+414.5	1113170
+415	1133364
+415.5	1163363
+416	1178283
+416.5	1205510
+417	1224503
+417.5	1258939
+418	1268136
+418.5	1294770
+419	1319152
+419.5	1345360
+420	1358315
+420.5	1382288
+421	1407324
+421.5	1431855
+422	1446909
+422.5	1473928
+423	1489268
+423.5	1516672
+424	1532743
+424.5	1555275
+425	1575196
+425.5	1593824
+426	1617423
+426.5	1640678
+427	1654585
+427.5	1679729
+428	1691094
+428.5	1716570
+429	1728504
+429.5	1757626
+430	1767316
+430.5	1786297
+431	1803027
+431.5	1824190
+432	1833171
+432.5	1849754
+433	1861380
+433.5	1885376
+434	1898917
+434.5	1908920
+435	1919955
+435.5	1935792
+436	1940502
+436.5	1956126
+437	1962567
+437.5	1973844
+438	1981945
+438.5	1991856
+439	2001829
+439.5	2006503
+440	2022301
+440.5	2026296
+441	2028185
+441.5	2043288
+442	2047012
+442.5	2055358
+443	2063902
+443.5	2071054
+444	2075214
+444.5	2077171
+445	2087976
+445.5	2089010
+446	2094813
+446.5	2095598
+447	2100185
+447.5	2106433
+448	2106650
+448.5	2104651
+449	2112311
+449.5	2110937
+450	2111394
+450.5	2109571
+451	2114415
+451.5	2111157
+452	2106323
+452.5	2113838
+453	2106578
+453.5	2101827
+454	2106674
+454.5	2099943
+455	2099573
+455.5	2091466
+456	2087621
+456.5	2088939
+457	2082004
+457.5	2076582
+458	2070829
+458.5	2062576
+459	2056803
+459.5	2042820
+460	2047611
+460.5	2038843
+461	2035336
+461.5	2025322
+462	2023044
+462.5	2017491
+463	2004979
+463.5	1996031
+464	1990110
+464.5	1983785
+465	1979172
+465.5	1964159
+466	1967267
+466.5	1953132
+467	1947229
+467.5	1936273
+468	1931617
+468.5	1918285
+469	1910536
+469.5	1900605
+470	1895311
+470.5	1886174
+471	1878382
+471.5	1863258
+472	1861710
+472.5	1848459
+473	1839928
+473.5	1828934
+474	1822824
+474.5	1806764
+475	1798805
+475.5	1782589
+476	1780090
+476.5	1763788
+477	1753484
+477.5	1730645
+478	1729738
+478.5	1706604
+479	1692376
+479.5	1678256
+480	1670853
+480.5	1653553
+481	1647147
+481.5	1627837
+482	1618623
+482.5	1606353
+483	1592124
+483.5	1572231
+484	1568348
+484.5	1553255
+485	1544612
+485.5	1529931
+486	1519791
+486.5	1506386
+487	1495218
+487.5	1482477
+488	1473545
+488.5	1459846
+489	1444732
+489.5	1431975
+490	1426928
+490.5	1409764
+491	1402359
+491.5	1384869
+492	1379777
+492.5	1361501
+493	1351411
+493.5	1341712
+494	1331609
+494.5	1316615
+495	1309431
+495.5	1289553
+496	1285405
+496.5	1269725
+497	1257902
+497.5	1244259
+498	1235220
+498.5	1223225
+499	1212461
+499.5	1197916
+500	1189137
+500.5	1174565
+501	1164506
+501.5	1148754
+502	1141238
+502.5	1124609
+503	1118343
+503.5	1097335
+504	1091489
+504.5	1075798
+505	1066900
+505.5	1051580
+506	1043887
+506.5	1030209
+507	1019606
+507.5	1004322
+508	997564
+508.5	986826
+509	976207
+509.5	960196
+510	960231
+510.5	948312
+511	935121
+511.5	922812
+512	915821
+512.5	905655
+513	896099
+513.5	882514
+514	877670
+514.5	866843
+515	859401
+515.5	845016
+516	841539
+516.5	831188
+517	821887
+517.5	808601
+518	806285
+518.5	794342
+519	786987
+519.5	776193
+520	768871
+520.5	756820
+521	751145
+521.5	739840
+522	736959
+522.5	724092
+523	716491
+523.5	706362
+524	703370
+524.5	690815
+525	682289
+525.5	673302
+526	664728
+526.5	658304
+527	651014
+527.5	636870
+528	637305
+528.5	622699
+529	616230
+529.5	605065
+530	602805
+530.5	593068
+531	585570
+531.5	575988
+532	570078
+532.5	564199
+533	556587
+533.5	547866
+534	542272
+534.5	536734
+535	530645
+535.5	521050
+536	516767
+536.5	510500
+537	505027
+537.5	495899
+538	494286
+538.5	486969
+539	481882
+539.5	474191
+540	468990
+540.5	462136
+541	458472
+541.5	450963
+542	447738
+542.5	441028
+543	436851
+543.5	426921
+544	424248
+544.5	418841
+545	415143
+545.5	407036
+546	402986
+546.5	396425
+547	393482
+547.5	387593
+548	382985
+548.5	376405
+549	375580
+549.5	367464
+550	363949
+550.5	359827
+551	354293
+551.5	348503
+552	344013
+552.5	339187
+553	333571
+553.5	329949
+554	326565
+554.5	320257
+555	316266
+555.5	312021
+556	309111
+556.5	304336
+557	302464
+557.5	297034
+558	293749
+558.5	289562
+559	285592
+559.5	281347
+560	279207
+560.5	275338
+561	272477
+561.5	267178
+562	264620
+562.5	261740
+563	258829
+563.5	253167
+564	251302
+564.5	247426
+565	245912
+565.5	242308
+566	237949
+566.5	235529
+567	232047
+567.5	227743
+568	227393
+568.5	222848
+569	222440
+569.5	217347
+570	215524
+570.5	212062
+571	210004
+571.5	206347
+572	203422
+572.5	200171
+573	198311
+573.5	195473
+574	195370
+574.5	191522
+575	188480
+575.5	186254
+576	183891
+576.5	181109
+577	178900
+577.5	176202
+578	174606
+578.5	169736
+579	169341
+579.5	165173
+580	164304
+580.5	162826
+581	161116
+581.5	157138
+582	155870
+582.5	154549
+583	152869
+583.5	149688
+584	149262
+584.5	146467
+585	144038
+585.5	142865
+586	140846
+586.5	138827
+587	136914
+587.5	134659
+588	133524
+588.5	130691
+589	130342
+589.5	128304
+590	125502
+590.5	125953
+591	124360
+591.5	121478
+592	120564
+592.5	119129
+593	116378
+593.5	116478
+594	114275
+594.5	113511
+595	111401
+595.5	110368
+596	108451
+596.5	106886
+597	105675
+597.5	103110
+598	103232
+598.5	100672
+599	100506
+599.5	99162
+600	96342
+"""
+
+_qs_df = pd.read_csv(io.StringIO(_QUININE_SULFATE_EMS_TXT), sep="\t", header=None, names=["wavelength", "intensity"])
+QUININE_SULFATE_EXAMPLE = {
+    "option_label": "Usar dato real (sulfato de quinina, PhotochemCAD)",
+    "wl": _qs_df["wavelength"].to_numpy(dtype=float),
+    "intensity": _qs_df["intensity"].to_numpy(dtype=float),
+    "citation": (
+        "Sulfato de quinina en H\u2082SO\u2084 0.5 M, excitacion 310 nm, \u03a6ref = 0.546 (Eaton, 1988). "
+        "Espectro digitalizado: PhotochemCAD 2.1a (Du et al. 1998; Dixon et al. 2005), "
+        "reprocesado por S. Prahl, Oregon Medical Laser Center."
+    ),
+    "url": "https://omlc.org/spectra/PhotochemCAD/html/081.html",
+}
+
+
+def _render_spectrum_result(wl, intensity):
+    """Grafica un espectro y muestra/retorna su area integrada. Compartido
+    entre la carga de archivo propio y el dataset de referencia embebido."""
+    peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
+
+    fig, ax = plt.subplots(figsize=(4, 2.0))
+    ax.plot(wl, intensity, color="#1f77b4", linewidth=1.4)
+    ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
+    ax.set_ylabel("Intensidad", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.grid(alpha=0.25)
+    show_and_close(fig)
+
+    st.success(f"Area integrada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
+    return area
+
+
+def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=None, embedded_example=None):
+    """Campo de 'area integrada' reutilizable: manual, calculada subiendo un
+    espectro propio, o (si se provee embedded_example) usando un dataset de
+    referencia real ya incluido en la app. Devuelve el area a usar en el calculo."""
     with st.container(border=True):
         st.markdown(f"**{label}**")
         if help_text:
             st.caption(help_text)
+
+        options = ["Manual", "Subir espectro"]
+        if embedded_example:
+            options.append(embedded_example["option_label"])
         mode = st.radio(
-            "Origen del dato", ["Manual", "Subir espectro"],
+            "Origen del dato", options,
             key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
         )
 
         if mode == "Manual":
             return st.number_input(label, min_value=min_value, value=default_value,
                                    format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
+
+        if embedded_example and mode == embedded_example["option_label"]:
+            st.caption(embedded_example["citation"])
+            st.link_button("Ver la fuente original", embedded_example["url"])
+            try:
+                return _render_spectrum_result(embedded_example["wl"], embedded_example["intensity"])
+            except Exception as e:
+                st.error(f"No se pudo calcular el area del dataset de referencia: {e}")
+                return default_value
 
         f = st.file_uploader("Espectro (CSV o XLSX)", type=["csv", "xlsx"],
                              key=f"{key_prefix}_file", label_visibility="collapsed")
@@ -492,18 +1108,7 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=No
                     wl_max = st.number_input("Max nm", min_value=100, max_value=10000, value=900, key=f"{key_prefix}_wlmax")
 
             wl, intensity = filter_and_normalize(df[wl_col], df[int_col], wl_min, wl_max, normalize)
-            peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
-
-            fig, ax = plt.subplots(figsize=(4, 2.0))
-            ax.plot(wl, intensity, color="#1f77b4", linewidth=1.4)
-            ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
-            ax.set_ylabel("Intensidad", fontsize=8)
-            ax.tick_params(labelsize=7)
-            ax.grid(alpha=0.25)
-            show_and_close(fig)
-
-            st.success(f"Area integrada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
-            return area
+            return _render_spectrum_result(wl, intensity)
         except Exception as e:
             st.error(f"No se pudo calcular el area a partir del espectro: {e}")
             return default_value
@@ -1558,17 +2163,6 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
 
         with col_in:
             st.markdown("#### Datos de entrada")
-            st.link_button(
-                "\U0001F517 Descargar espectro real de sulfato de quinina (PhotochemCAD)",
-                "https://omlc.org/spectra/PhotochemCAD/html/081.html",
-                use_container_width=True,
-            )
-            st.caption(
-                "Espectro de emision digitalizado real (excitacion 310 nm, en H\u2082SO\u2084 0.5 M, "
-                "\u03a6ref = 0.546, Eaton 1988) de la base de datos PhotochemCAD. Guarda el archivo "
-                "como CSV y subelo abajo, en 'Area integrada de emision (referencia)' \u2192 "
-                "'Subir espectro', para que la app calcule el area exactamente igual que con tus propios datos."
-            )
 
             st.markdown("##### Muestra")
             sample_area = area_input(
@@ -1592,6 +2186,7 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
             ref_area = area_input(
                 "Area integrada de emision (referencia)", "rel_ref_area", default_value=1.0,
                 help_text="Iref: area bajo la curva del espectro de emision de la referencia.",
+                embedded_example=QUININE_SULFATE_EXAMPLE,
             )
             ref_abs = absorbance_input(
                 "Absorbancia/reflectancia a la excitacion (referencia)", "rel_ref_abs", default_value=0.05,
