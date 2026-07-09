@@ -1024,21 +1024,27 @@ QUININE_SULFATE_EXAMPLE = {
 }
 
 
-def _render_spectrum_result(wl, intensity):
+def _render_spectrum_result(wl, intensity, color="#1f77b4"):
     """Grafica un espectro y muestra/retorna su area integrada. Compartido
     entre la carga de archivo propio y el dataset de referencia embebido."""
     peak_wl, peak_intensity, area, fwhm = spectrum_metrics(wl, intensity)
 
     fig, ax = plt.subplots(figsize=(4, 2.0))
-    ax.plot(wl, intensity, color="#1f77b4", linewidth=1.4)
+    ax.plot(wl, intensity, color=color, linewidth=1.6)
+    ax.fill_between(wl, intensity, color=color, alpha=0.12)
+    ax.axvline(peak_wl, color=color, linestyle="--", linewidth=0.8, alpha=0.6)
     ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
     ax.set_ylabel("Intensidad", fontsize=8)
     ax.tick_params(labelsize=7)
-    ax.grid(alpha=0.25)
+    ax.grid(alpha=0.2)
     show_and_close(fig)
 
-    st.success(f"Area integrada: {area:.6g}  (pico en {peak_wl:.1f} nm, FWHM {fwhm:.1f} nm)")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Area", f"{area:.4g}")
+    m2.metric("Pico", f"{peak_wl:.1f} nm")
+    m3.metric("FWHM", f"{fwhm:.1f} nm")
     return area
+
 
 
 # ------------------------------------------------------------------
@@ -1730,16 +1736,16 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=No
     espectro propio, o (si se provee embedded_example) usando un dataset de
     referencia real ya incluido en la app. Devuelve el area a usar en el calculo."""
     with st.container(border=True):
-        st.markdown(f"**{label}**")
+        st.markdown(f"\U0001F4C8 **{label}**")
         if help_text:
             st.caption(help_text)
 
         options = ["Manual", "Subir espectro"]
         if embedded_example:
             options.append(embedded_example["option_label"])
-        mode = st.radio(
-            "Origen del dato", options,
-            key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
+        mode = st.segmented_control(
+            "Origen del dato", options, default=options[0], required=True,
+            key=f"{key_prefix}_mode", label_visibility="collapsed",
         )
 
         if mode == "Manual":
@@ -1747,8 +1753,8 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=No
                                    format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
 
         if embedded_example and mode == embedded_example["option_label"]:
-            st.caption(embedded_example["citation"])
-            st.link_button("Ver la fuente original", embedded_example["url"])
+            st.info(f"\U0001F4DA {embedded_example['citation']}")
+            st.link_button("\U0001F517 Ver la fuente original", embedded_example["url"])
             try:
                 return _render_spectrum_result(embedded_example["wl"], embedded_example["intensity"])
             except Exception as e:
@@ -1772,7 +1778,7 @@ def area_input(label, key_prefix, default_value=1.0, min_value=0.0, help_text=No
 
             wl_guess, int_guess = guess_columns(df)
             cols = list(df.columns)
-            with st.expander("Ajustar columnas, rango y normalizacion", expanded=False):
+            with st.expander("\u2699\ufe0f Ajustar columnas, rango y normalizacion", expanded=False):
                 c1, c2, c3 = st.columns(3)
                 with c1:
                     wl_col = st.selectbox("Columna wavelength", options=cols,
@@ -1805,16 +1811,16 @@ def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_defaul
     (requiere que el usuario indique la concentracion y el paso optico usados
     en su propia medicion). Devuelve el valor a usar en el calculo."""
     with st.container(border=True):
-        st.markdown(f"**{label}**")
+        st.markdown(f"\U0001F52C **{label}**")
         if help_text:
             st.caption(help_text)
 
         options = ["Manual", "Subir espectro"]
         if embedded_example:
             options.append(embedded_example["option_label"])
-        mode = st.radio(
-            "Origen del dato", options,
-            key=f"{key_prefix}_mode", horizontal=True, label_visibility="collapsed",
+        mode = st.segmented_control(
+            "Origen del dato", options, default=options[0], required=True,
+            key=f"{key_prefix}_mode", label_visibility="collapsed",
         )
 
         if mode == "Manual":
@@ -1822,8 +1828,8 @@ def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_defaul
                                    format="%.6f", key=f"{key_prefix}_manual", label_visibility="collapsed")
 
         if embedded_example and mode == embedded_example["option_label"]:
-            st.caption(embedded_example["citation"])
-            st.link_button("Ver la fuente original", embedded_example["url"])
+            st.info(f"\U0001F4DA {embedded_example['citation']}")
+            st.link_button("\U0001F517 Ver la fuente original", embedded_example["url"])
             st.caption(
                 "El coeficiente de extincion molar (\u03b5) es un dato real y publicado, pero la "
                 "absorbancia final depende de la concentracion y el paso optico de tu propia "
@@ -1851,19 +1857,19 @@ def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_defaul
                 absorbance = epsilon_at_wl * conc * path_len
 
                 fig, ax = plt.subplots(figsize=(4, 2.0))
-                ax.plot(wl, eps, color="#d62728", linewidth=1.4)
+                ax.plot(wl, eps, color="#d62728", linewidth=1.6)
+                ax.fill_between(wl, eps, color="#d62728", alpha=0.10)
                 ax.axvline(exc_wl, color="#6b7280", linestyle="--", linewidth=1)
                 ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
                 ax.set_ylabel("\u03b5 (M\u207b\u00b9cm\u207b\u00b9)", fontsize=8)
                 ax.tick_params(labelsize=7)
-                ax.grid(alpha=0.25)
+                ax.grid(alpha=0.2)
                 show_and_close(fig)
 
-                st.success(
-                    f"\u03b5({exc_wl:.1f} nm) = {epsilon_at_wl:.6g} M\u207b\u00b9cm\u207b\u00b9  \u2192  "
-                    f"A = \u03b5\u00b7c\u00b7l = {epsilon_at_wl:.6g} \u00d7 {conc:.3e} \u00d7 {path_len:.3g} "
-                    f"= {absorbance:.6g}"
-                )
+                m1, m2, m3 = st.columns(3)
+                m1.metric("\u03b5 en exc.", f"{epsilon_at_wl:.4g}")
+                m2.metric("A = \u03b5\u00b7c\u00b7l", f"{absorbance:.4g}")
+                m3.metric("\u2265 0.1", "\u26a0\ufe0f Si" if absorbance >= 0.1 else "\u2705 No")
                 if absorbance >= 0.1:
                     st.warning(
                         "Esta absorbancia es \u2265 0.1: reduce la concentracion para evitar "
@@ -1891,7 +1897,7 @@ def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_defaul
 
             wl_guess, val_guess = guess_columns(df)
             cols = list(df.columns)
-            with st.expander("Ajustar columnas y tipo de espectro", expanded=False):
+            with st.expander("\u2699\ufe0f Ajustar columnas y tipo de espectro", expanded=False):
                 c1, c2, c3 = st.columns(3)
                 with c1:
                     wl_col = st.selectbox("Columna wavelength", options=cols,
@@ -1922,28 +1928,28 @@ def absorbance_input(label, key_prefix, default_value=0.05, excitation_wl_defaul
             raw_value = float(np.interp(exc_wl, wl, val))
 
             fig, ax = plt.subplots(figsize=(4, 2.0))
-            ax.plot(wl, val, color="#d62728", linewidth=1.4)
+            ax.plot(wl, val, color="#d62728", linewidth=1.6)
+            ax.fill_between(wl, val, color="#d62728", alpha=0.10)
             ax.axvline(exc_wl, color="#6b7280", linestyle="--", linewidth=1)
             ax.set_xlabel("Longitud de onda (nm)", fontsize=8)
             ax.set_ylabel(spectrum_kind, fontsize=8)
             ax.tick_params(labelsize=7)
-            ax.grid(alpha=0.25)
+            ax.grid(alpha=0.2)
             show_and_close(fig)
 
             if spectrum_kind == "Absorbancia":
                 absorbance = raw_value
-                st.success(f"Absorbancia a {exc_wl:.1f} nm: {absorbance:.6g}")
+                st.metric(f"Absorbancia a {exc_wl:.1f} nm", f"{absorbance:.4g}")
             else:
                 R = raw_value / 100.0 if spectrum_kind == "Reflectancia (%)" else raw_value
                 R = min(max(R, 1e-6), 0.999999)
                 absorbance = ((1 - R) ** 2) / (2 * R)
-                st.success(
-                    f"Reflectancia a {exc_wl:.1f} nm: {R:.4f} \u2192 F(R) de Kubelka-Munk = {absorbance:.6g} "
-                    "(se usa en lugar de la absorbancia para muestras solidas)"
-                )
+                m1, m2 = st.columns(2)
+                m1.metric(f"Reflectancia a {exc_wl:.1f} nm", f"{R:.4f}")
+                m2.metric("F(R) Kubelka-Munk", f"{absorbance:.4g}")
                 st.caption(
-                    "F(R) = (1-R)\u00b2 / (2R). Para reflectancia difusa esta funcion cumple el mismo papel "
-                    "que la absorbancia en la ecuacion de rendimiento cuantico relativo."
+                    "F(R) = (1-R)\u00b2 / (2R), usada en lugar de la absorbancia para muestras solidas "
+                    "en la ecuacion de rendimiento cuantico relativo."
                 )
             return absorbance
         except Exception as e:
@@ -2906,7 +2912,8 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         with col_in:
             st.markdown("#### Datos de entrada")
 
-            st.markdown("##### Muestra")
+            st.markdown("##### 🧪 Muestra")
+            st.caption("Datos de tu compuesto problema.")
             sample_area = area_input(
                 "Area integrada de emision (muestra)", "rel_sample_area", default_value=1.0,
                 help_text="Ix: area bajo la curva del espectro de emision de tu muestra.",
@@ -2920,7 +2927,9 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
                 help="nx: indice de refraccion del solvente de la muestra (agua \u2248 1.333, etanol \u2248 1.36).",
             )
 
-            st.markdown("##### Referencia")
+            st.markdown("---")
+            st.markdown("##### 📖 Referencia")
+            st.caption("Compuesto de Φ ya conocido, usado como patron de comparacion.")
             ref_phi = st.number_input(
                 "Phi referencia", min_value=0.0, max_value=1.0, value=0.55, format="%.6f", key="rel_ref_phi",
                 help="\u03a6ref: rendimiento cuantico ya conocido de la referencia, tomado de la literatura.",
@@ -3058,13 +3067,16 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
                 st.session_state["abs_Ec_manual"] = 0.42
                 st.rerun()
 
-            st.markdown("##### Excitacion")
+            st.markdown("##### 🔦 Excitacion")
+            st.caption("Area del pico de excitacion dispersada.")
             L_a = area_input("La \u2014 referencia/blanco", "abs_La", default_value=1.0,
                              help_text="Area del pico de excitacion dispersada, midiendo solo el blanco o la referencia.")
             L_c = area_input("Lc \u2014 con la muestra", "abs_Lc", default_value=0.5,
                              help_text="Area del mismo pico de excitacion, ahora con la muestra puesta en el haz directo.")
 
-            st.markdown("##### Emision")
+            st.markdown("---")
+            st.markdown("##### ✨ Emision")
+            st.caption("Area del pico de emision de la muestra.")
             E_a = area_input("Ea \u2014 excitacion indirecta", "abs_Ea", default_value=0.1,
                              help_text="Area de emision cuando la muestra se excita solo indirectamente (luz dispersada dentro de la esfera).")
             E_c = area_input("Ec \u2014 excitacion directa", "abs_Ec", default_value=0.6,
