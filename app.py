@@ -2583,34 +2583,304 @@ if st.session_state["active_page"] == "Aprender":
             st.info("Sube un CSV o XLSX para ver el calculo aplicado a tus propios datos.")
 
     elif topic == "Visor de espectros":
-        st.markdown("### Tipos de espectro")
+        st.markdown("### Visor de espectros: guia extendida")
         st.write(
-            "Un espectro de absorcion muestra cuanta luz absorbe la muestra en cada longitud de onda "
-            "(util para determinar concentracion con la ley de Beer-Lambert). Un espectro de emision "
-            "muestra la intensidad de luz emitida tras excitar la muestra a una longitud de onda fija. "
-            "Un espectro de excitacion muestra que longitudes de onda de excitacion producen mas emision "
-            "a una longitud de onda de deteccion fija."
+            "El visor de espectros es el modulo para mirar, comparar y preparar datos espectroscopicos. "
+            "Un espectro es una relacion entre una variable optica, casi siempre longitud de onda, y una "
+            "respuesta experimental: absorbancia, transmitancia, reflectancia, intensidad de emision o "
+            "intensidad de excitacion."
         )
-        st.markdown("### Solucion vs solido")
-        st.write(
-            "En solucion, la muestra esta disuelta en un solvente y el entorno quimico es mas homogeneo; "
-            "los efectos de filtro interno y las interacciones soluto-solvente son relevantes. En solido "
-            "(polvo, pastilla, pelicula), el empaquetamiento cristalino y los efectos de dispersion de luz "
-            "pueden ensanchar o desplazar las bandas frente a la misma especie en solucion."
-        )
-        st.markdown("### Metricas que calcula el visor")
-        st.write(
-            "Para cada espectro cargado se reportan: longitud de onda del pico maximo, intensidad en el "
-            "pico, area integrada (regla trapezoidal) y FWHM (ancho a media altura), calculado como la "
-            "distancia entre los primeros puntos que cruzan la mitad de la intensidad maxima a cada lado del pico."
-        )
-        st.markdown("### Normalizacion")
-        st.write(
-            "'Max = 1' escala el espectro para que su punto mas alto valga 1, util para comparar formas de "
-            "banda entre muestras de intensidad muy distinta. 'Area = 1' escala para que el area bajo la "
-            "curva sea 1, util cuando interesa comparar distribucion espectral independientemente de la "
-            "intensidad total emitida o absorbida."
-        )
+
+        def _gaussian(x, mu, sigma, amp=1.0):
+            return amp * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+
+        def _draw_absorption_diagram():
+            fig_d, ax_d = plt.subplots(figsize=(8, 2.2))
+            ax_d.set_axis_off()
+            boxes = [
+                (0.04, 0.42, 0.15, 0.25, "Fuente"),
+                (0.27, 0.42, 0.18, 0.25, "Monocromador"),
+                (0.54, 0.38, 0.16, 0.33, "Muestra"),
+                (0.79, 0.42, 0.15, 0.25, "Detector"),
+            ]
+            for x0, y0, w, h, label in boxes:
+                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, fill=False, linewidth=1.5))
+                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=10)
+            for x0, x1 in [(0.19, 0.27), (0.45, 0.54), (0.70, 0.79)]:
+                ax_d.annotate("", xy=(x1, 0.55), xytext=(x0, 0.55),
+                              arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.text(0.50, 0.12, "Absorcion/transmitancia: se compara I0 con I despues de atravesar la muestra",
+                      ha="center", fontsize=9)
+            return fig_d
+
+        def _draw_fluorescence_diagram():
+            fig_d, ax_d = plt.subplots(figsize=(8, 2.4))
+            ax_d.set_axis_off()
+            boxes = [
+                (0.04, 0.45, 0.15, 0.25, "Fuente"),
+                (0.28, 0.45, 0.17, 0.25, "Mono. exc."),
+                (0.56, 0.42, 0.15, 0.31, "Muestra"),
+                (0.77, 0.70, 0.17, 0.22, "Mono. em."),
+                (0.77, 0.18, 0.17, 0.22, "Detector"),
+            ]
+            for x0, y0, w, h, label in boxes:
+                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, fill=False, linewidth=1.5))
+                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=10)
+            ax_d.annotate("", xy=(0.28, 0.575), xytext=(0.19, 0.575),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.annotate("", xy=(0.56, 0.575), xytext=(0.45, 0.575),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.annotate("", xy=(0.77, 0.80), xytext=(0.71, 0.60),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.annotate("", xy=(0.85, 0.40), xytext=(0.85, 0.70),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.text(0.50, 0.08, "Fluorescencia: la excitacion entra por un camino y la emision se detecta normalmente a 90 grados",
+                      ha="center", fontsize=9)
+            return fig_d
+
+        def _draw_reflectance_diagram():
+            fig_d, ax_d = plt.subplots(figsize=(8, 2.4))
+            ax_d.set_axis_off()
+            ax_d.add_patch(plt.Circle((0.55, 0.52), 0.22, fill=False, linewidth=1.7))
+            ax_d.add_patch(plt.Rectangle((0.50, 0.40), 0.10, 0.08, fill=True, alpha=0.18))
+            ax_d.text(0.55, 0.44, "Solido", ha="center", va="center", fontsize=9)
+            ax_d.add_patch(plt.Rectangle((0.08, 0.42), 0.16, 0.22, fill=False, linewidth=1.5))
+            ax_d.text(0.16, 0.53, "Fuente", ha="center", va="center", fontsize=10)
+            ax_d.add_patch(plt.Rectangle((0.77, 0.42), 0.16, 0.22, fill=False, linewidth=1.5))
+            ax_d.text(0.85, 0.53, "Detector", ha="center", va="center", fontsize=10)
+            ax_d.annotate("", xy=(0.36, 0.53), xytext=(0.24, 0.53),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.annotate("", xy=(0.77, 0.53), xytext=(0.67, 0.53),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
+            ax_d.text(0.55, 0.80, "Esfera integradora / accesorio de reflectancia difusa",
+                      ha="center", fontsize=10)
+            ax_d.text(0.50, 0.12, "Reflectancia: se mide la luz devuelta por polvos, peliculas o superficies",
+                      ha="center", fontsize=9)
+            return fig_d
+
+        tabs_viewer_learn = st.tabs([
+            "Fundamentos",
+            "Equipos",
+            "Tipos",
+            "Metricas",
+            "Procesamiento",
+            "Buenas practicas",
+        ])
+
+        with tabs_viewer_learn[0]:
+            st.markdown("### Que representa un espectro")
+            st.write(
+                "La longitud de onda se coloca normalmente en el eje X y la respuesta en el eje Y. "
+                "La forma de la banda contiene informacion sobre niveles electronicos, entorno quimico, "
+                "vibraciones, agregacion, defectos, dispersidad y rigidez del medio."
+            )
+            st.latex(r"E = \frac{hc}{\lambda}")
+            st.latex(r"E(\mathrm{eV}) \approx \frac{1240}{\lambda(\mathrm{nm})}")
+            st.write(
+                "Longitudes de onda pequenas corresponden a fotones de mayor energia. Por eso un cambio "
+                "de 400 a 500 nm no representa el mismo cambio energetico que uno de 700 a 800 nm."
+            )
+
+            wl_demo = np.linspace(300, 750, 600)
+            abs_demo = _gaussian(wl_demo, 380, 35, 0.75) + _gaussian(wl_demo, 455, 60, 0.35)
+            em_demo = _gaussian(wl_demo, 560, 48, 1.0)
+            exc_demo = _gaussian(wl_demo, 390, 32, 0.65) + _gaussian(wl_demo, 470, 50, 0.45)
+
+            fig_demo, ax_demo = plt.subplots(figsize=(8, 4))
+            ax_demo.plot(wl_demo, abs_demo, label="Absorcion", color="#1f77b4", linewidth=2)
+            ax_demo.plot(wl_demo, exc_demo, label="Excitacion", color="#2ca02c", linewidth=2)
+            ax_demo.plot(wl_demo, em_demo, label="Emision", color="#d62728", linewidth=2)
+            ax_demo.set_xlabel("Longitud de onda (nm)")
+            ax_demo.set_ylabel("Senal normalizada")
+            ax_demo.grid(alpha=0.25)
+            ax_demo.legend(loc="best")
+            show_and_close(fig_demo)
+
+            st.markdown("### Absorcion, excitacion y emision no son lo mismo")
+            st.write(
+                "La absorcion indica que longitudes de onda toma la muestra desde la luz incidente. "
+                "La excitacion mide que longitudes de onda producen emision cuando se observa una longitud "
+                "de emision fija. La emision mide que luz sale de la muestra cuando se excita a una longitud fija."
+            )
+
+        with tabs_viewer_learn[1]:
+            st.markdown("### Esquemas de equipos")
+            st.write(
+                "Los equipos cambian segun el tipo de medicion. En absorcion se mide luz transmitida; "
+                "en fluorescencia se separan excitacion y emision; en reflectancia difusa se recoge luz "
+                "dispersada por una superficie o polvo."
+            )
+
+            eq1, eq2 = st.columns(2)
+            with eq1:
+                st.markdown("#### UV-Vis de absorcion")
+                show_and_close(_draw_absorption_diagram())
+            with eq2:
+                st.markdown("#### Fluorimetro")
+                show_and_close(_draw_fluorescence_diagram())
+
+            st.markdown("#### Reflectancia difusa en solidos")
+            show_and_close(_draw_reflectance_diagram())
+
+            st.markdown("### Que cambia experimentalmente")
+            st.write(
+                "En absorcion de soluciones conviene usar cubetas limpias, blancos del solvente y absorbancias "
+                "moderadas. En fluorescencia importa mucho la geometria, el ancho de rendijas, la correccion "
+                "instrumental y evitar filtro interno. En solidos, la preparacion de la superficie, el tamano "
+                "de particula y la dispersion pueden cambiar mucho el espectro."
+            )
+
+        with tabs_viewer_learn[2]:
+            st.markdown("### Absorcion")
+            st.write(
+                "La absorbancia se define a partir de la transmitancia. Si I0 es la intensidad incidente "
+                "e I es la intensidad transmitida:"
+            )
+            st.latex(r"T = \frac{I}{I_0}")
+            st.latex(r"A = -\log_{10}(T) = \log_{10}\left(\frac{I_0}{I}\right)")
+            st.write("En soluciones diluidas suele aplicarse la ley de Beer-Lambert:")
+            st.latex(r"A = \varepsilon b c")
+
+            st.markdown("### Emision")
+            st.write(
+                "En emision se fija una longitud de onda de excitacion y se barre la longitud de onda emitida. "
+                "El maximo de emision se asocia con el estado excitado relajado antes de emitir."
+            )
+            st.latex(r"I_{em}(\lambda_{em}) \quad \mathrm{con}\quad \lambda_{exc}\ \mathrm{fija}")
+
+            st.markdown("### Excitacion")
+            st.write(
+                "En excitacion se fija una longitud de onda de emision y se barre la longitud de onda de excitacion. "
+                "Si no hay procesos raros, el espectro de excitacion suele parecerse al de absorcion del cromoforo emisor."
+            )
+            st.latex(r"I_{em}(\lambda_{det}) \quad \mathrm{mientras}\quad \lambda_{exc}\ \mathrm{varia}")
+
+            st.markdown("### Reflectancia difusa")
+            st.write(
+                "En solidos se mide reflectancia R. Si la transmitancia es despreciable, se puede usar una "
+                "absorcion aparente como 1 - R, o transformar R mediante Kubelka-Munk cuando se quiere una "
+                "magnitud relacionada con absorcion/dispersión."
+            )
+            st.latex(r"A_{aparente} \approx 1 - R")
+            st.latex(r"F(R) = \frac{(1-R)^2}{2R}")
+
+        with tabs_viewer_learn[3]:
+            st.markdown("### Metricas que calcula o puede calcular el visor")
+            st.write(
+                "Las metricas resumen una curva completa en pocos numeros. Sirven para comparar muestras, "
+                "condiciones de solvente, concentracion, estado solido vs solucion o tratamientos termicos."
+            )
+
+            wl_m = np.linspace(430, 720, 500)
+            y_m = _gaussian(wl_m, 575, 35, 1.0) + 0.06
+            peak_idx = int(np.argmax(y_m))
+            peak_wl = wl_m[peak_idx]
+            peak_y = y_m[peak_idx]
+            half_y = 0.06 + (peak_y - 0.06) / 2
+            above = np.where(y_m >= half_y)[0]
+            left_h = wl_m[above[0]]
+            right_h = wl_m[above[-1]]
+
+            fig_met, ax_met = plt.subplots(figsize=(8, 4))
+            ax_met.plot(wl_m, y_m, color="#7c3aed", linewidth=2)
+            ax_met.axvline(peak_wl, color="#dc2626", linestyle="--", label=f"lambda max = {peak_wl:.0f} nm")
+            ax_met.hlines(half_y, left_h, right_h, color="#059669", linewidth=2, label=f"FWHM = {right_h-left_h:.0f} nm")
+            ax_met.fill_between(wl_m, 0, y_m, color="#7c3aed", alpha=0.12, label="Area integrada")
+            ax_met.set_xlabel("Longitud de onda (nm)")
+            ax_met.set_ylabel("Intensidad")
+            ax_met.grid(alpha=0.25)
+            ax_met.legend(loc="best")
+            show_and_close(fig_met)
+
+            st.latex(r"\lambda_{max}: \mathrm{longitud\ de\ onda\ del\ maximo}")
+            st.latex(r"Area = \int_{\lambda_1}^{\lambda_2} I(\lambda)\,d\lambda")
+            st.latex(r"FWHM = \lambda_{derecha,\,1/2} - \lambda_{izquierda,\,1/2}")
+            st.latex(r"Centroide = \frac{\int \lambda I(\lambda)\,d\lambda}{\int I(\lambda)\,d\lambda}")
+
+            st.markdown("### Desplazamiento de Stokes")
+            st.write(
+                "Si tienes absorcion y emision de la misma muestra, el desplazamiento de Stokes compara "
+                "el maximo de absorcion con el maximo de emision. En energia o numero de onda suele ser "
+                "mas interpretable que en nm."
+            )
+            st.latex(r"\Delta \tilde{\nu}(\mathrm{cm}^{-1}) = 10^7\left(\frac{1}{\lambda_{abs}} - \frac{1}{\lambda_{em}}\right)")
+            st.latex(r"\Delta E(\mathrm{eV}) = 1240\left(\frac{1}{\lambda_{abs}} - \frac{1}{\lambda_{em}}\right)")
+
+        with tabs_viewer_learn[4]:
+            st.markdown("### Normalizacion")
+            st.write(
+                "Normalizar cambia la escala vertical para facilitar comparaciones. No cambia la posicion "
+                "de los picos, pero si cambia areas e intensidades absolutas."
+            )
+            st.latex(r"I_{max=1}(\lambda) = \frac{I(\lambda)}{\max(|I|)}")
+            st.latex(r"I_{area=1}(\lambda) = \frac{I(\lambda)}{\int |I(\lambda)|\,d\lambda}")
+
+            wl_n = np.linspace(350, 750, 600)
+            y1 = 3.0 * _gaussian(wl_n, 520, 35, 1.0)
+            y2 = 0.9 * _gaussian(wl_n, 590, 55, 1.0)
+            y1n = y1 / np.max(y1)
+            y2n = y2 / np.max(y2)
+            fig_norm, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(9, 3.5))
+            ax_a.plot(wl_n, y1, label="Muestra A", color="#1f77b4")
+            ax_a.plot(wl_n, y2, label="Muestra B", color="#d62728")
+            ax_a.set_title("Intensidad original")
+            ax_a.set_xlabel("nm")
+            ax_a.set_ylabel("Intensidad")
+            ax_a.grid(alpha=0.25)
+            ax_a.legend(fontsize=8)
+            ax_b.plot(wl_n, y1n, label="Muestra A", color="#1f77b4")
+            ax_b.plot(wl_n, y2n, label="Muestra B", color="#d62728")
+            ax_b.set_title("Normalizado a max = 1")
+            ax_b.set_xlabel("nm")
+            ax_b.set_ylabel("Intensidad normalizada")
+            ax_b.grid(alpha=0.25)
+            ax_b.legend(fontsize=8)
+            fig_norm.tight_layout()
+            show_and_close(fig_norm)
+
+            st.markdown("### Suavizado y linea base")
+            st.write(
+                "El suavizado reduce ruido, pero tambien puede deformar picos estrechos. La correccion de "
+                "linea base evita que el area integrada se infle por un offset instrumental."
+            )
+            st.latex(r"I_{corr}(\lambda) = I(\lambda) - I_{base}(\lambda)")
+            st.latex(r"I_{clip}(\lambda) = \max(I_{corr}(\lambda), 0)")
+            st.write(
+                "En el visor, una correccion simple es restar el minimo. Para datos exigentes, una linea "
+                "base ajustada por regiones sin senal suele ser mas robusta."
+            )
+
+        with tabs_viewer_learn[5]:
+            st.markdown("### Buenas practicas para cargar y comparar espectros")
+            st.write(
+                "Un buen visor no arregla datos mal adquiridos, pero ayuda a encontrarlos. Antes de comparar "
+                "muestras, conviene revisar si todas fueron medidas con el mismo rango, rendijas, velocidad "
+                "de barrido, correccion instrumental, concentracion y geometria."
+            )
+
+            qc_rows = pd.DataFrame([
+                {"Revision": "Columnas", "Que mirar": "Longitud de onda e intensidad bien seleccionadas", "Riesgo": "Picos falsos o eje invertido"},
+                {"Revision": "Rango", "Que mirar": "Mismo intervalo espectral entre muestras", "Riesgo": "Areas no comparables"},
+                {"Revision": "Linea base", "Que mirar": "Offset cercano a cero fuera de banda", "Riesgo": "Area integrada inflada"},
+                {"Revision": "Saturacion", "Que mirar": "Picos cortados o mesetas artificiales", "Riesgo": "lambda max e intensidad erroneos"},
+                {"Revision": "Filtro interno", "Que mirar": "Absorbancia baja en fluorescencia de solucion", "Riesgo": "Emision subestimada"},
+                {"Revision": "Solidos", "Que mirar": "Superficie, granulometria y compactacion consistentes", "Riesgo": "Dispersión cambia la forma del espectro"},
+            ])
+            st.dataframe(qc_rows, use_container_width=True, hide_index=True)
+
+            st.markdown("### Interpretacion rapida")
+            st.write(
+                "Un corrimiento hacia longitudes de onda mayores se llama desplazamiento batochromico o "
+                "corrimiento al rojo. Un corrimiento hacia longitudes de onda menores se llama "
+                "desplazamiento hipsocromico o corrimiento al azul. Una banda mas ancha puede indicar "
+                "mayor heterogeneidad del entorno, mas acoplamiento vibracional o mas desorden estructural."
+            )
+            st.markdown("### Que conviene implementar despues")
+            st.write(
+                "El siguiente nivel del visor podria incluir deteccion de multiples picos, calculo automatico "
+                "de Stokes shift, correccion de blanco, conversion nm/eV/cm-1, comparacion solucion-solido y "
+                "exportacion de figuras con plantillas de publicacion."
+            )
 
     else:  # Rendimiento cuantico
         st.markdown("### Que es el rendimiento cuantico")
