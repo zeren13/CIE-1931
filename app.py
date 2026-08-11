@@ -2173,154 +2173,6 @@ def build_relative_qy_pdf(data: dict) -> bytes:
     return bio.getvalue()
 
 
-# ---------- Rendimiento cuantico ABSOLUTO (metodo de esfera integradora) ----------
-
-def _absolute_qy_steps(data):
-    """Metodo de de Mello, Wittmann y Friend (1997) para rendimiento cuantico
-    absoluto por esfera integradora. Calcula pasos intermedios y arma el
-    texto de cada paso, compartido entre el exportador a Word y a PDF."""
-    La, Lc = data["L_a"], data["L_c"]
-    Ea, Ec = data["E_a"], data["E_c"]
-
-    lc_la_ratio = Lc / La
-    A = 1 - lc_la_ratio
-    one_minus_A_times_Ea = (1 - A) * Ea
-    numerator = Ec - one_minus_A_times_Ea
-    denominator = A * La
-    phi_abs = numerator / denominator if denominator != 0 else float("nan")
-
-    steps = [
-        (1, "Fraccion de luz absorbida (A)",
-         "Antes de calcular el rendimiento cuantico hay que saber que fraccion de la luz de excitacion "
-         "realmente absorbio la muestra. Se obtiene comparando cuanta luz de excitacion se detecta con "
-         "la muestra puesta (Lc) frente a sin ella, solo el blanco/referencia (La).",
-         [
-            "A = 1 \u2212 (Lc / La)",
-            f"Lc / La = {Lc:.6g} / {La:.6g} = {lc_la_ratio:.6g}",
-            f"A = 1 \u2212 {lc_la_ratio:.6g} = {A:.6g}",
-        ]),
-        (2, "Formula general del rendimiento cuantico absoluto",
-         "A diferencia del metodo relativo, este metodo no necesita una sustancia de referencia externa: "
-         "toda la informacion sale de cuatro mediciones hechas con la misma esfera integradora.",
-         [
-            "\u03a6abs = (Ec \u2212 (1 \u2212 A)\u00b7Ea) / (A\u00b7La)",
-        ]),
-        (3, "Termino de emision indirecta corregido: (1 \u2212 A)\u00b7Ea",
-         "Este termino corrige la emision que ocurriria por excitacion indirecta (luz dispersada dentro "
-         "de la esfera que tambien excita la muestra), para no contarla dos veces en el resultado final.",
-         [
-            f"(1 \u2212 A) = 1 \u2212 {A:.6g} = {1 - A:.6g}",
-            f"(1 \u2212 A)\u00b7Ea = {1 - A:.6g} \u00d7 {Ea:.6g} = {one_minus_A_times_Ea:.6g}",
-        ]),
-        (4, "Numerador: Ec \u2212 (1 \u2212 A)\u00b7Ea",
-         "El numerador representa la emision de fluorescencia que puede atribuirse unicamente a la "
-         "excitacion directa de la muestra, ya sin la contribucion indirecta del paso anterior.",
-         [
-            f"Numerador = {Ec:.6g} \u2212 {one_minus_A_times_Ea:.6g} = {numerator:.6g}",
-        ]),
-        (5, "Denominador: A\u00b7La",
-         "El denominador representa el total de fotones de excitacion que la muestra efectivamente absorbio.",
-         [
-            f"Denominador = {A:.6g} \u00d7 {La:.6g} = {denominator:.6g}",
-        ]),
-        (6, "Dividir numerador entre denominador",
-         "El cociente entre fotones emitidos (numerador) y fotones absorbidos (denominador) es, por "
-         "definicion, el rendimiento cuantico absoluto de la muestra.",
-         [
-            f"\u03a6abs = {numerator:.6g} / {denominator:.6g} = {phi_abs:.6g}",
-        ]),
-    ]
-    return phi_abs, A, steps
-
-
-def build_absolute_qy_docx(data: dict) -> bytes:
-    """Genera un reporte .docx con el desarrollo matematico paso a paso
-    del rendimiento cuantico absoluto (metodo de esfera integradora)."""
-    phi_abs, A, steps = _absolute_qy_steps(data)
-    doc = Document()
-    _docx_report_header(
-        doc, "Rendimiento cuantico absoluto", data["timestamp"],
-        "Metodo absoluto (de Mello, Wittmann y Friend, 1997) con esfera integradora: usa las "
-        "areas de excitacion dispersada y de emision, medidas con y sin excitacion directa de "
-        "la muestra, para obtener el rendimiento cuantico sin necesitar una referencia externa."
-    )
-
-    doc.add_heading("Datos de entrada", level=2)
-    table = doc.add_table(rows=1, cols=2)
-    table.style = "Light Grid Accent 1"
-    hdr = table.rows[0].cells
-    hdr[0].text = "Parametro"
-    hdr[1].text = "Valor (area integrada)"
-    rows = [
-        ("La \u2014 excitacion, referencia/blanco", f"{data['L_a']:.6g}"),
-        ("Lc \u2014 excitacion, con la muestra", f"{data['L_c']:.6g}"),
-        ("Ea \u2014 emision, excitacion indirecta", f"{data['E_a']:.6g}"),
-        ("Ec \u2014 emision, excitacion directa", f"{data['E_c']:.6g}"),
-    ]
-    for label, val in rows:
-        cells = table.add_row().cells
-        cells[0].text = label
-        cells[1].text = val
-
-    doc.add_heading("Desarrollo matematico", level=2)
-    for step_number, step_title, concept, lines in steps:
-        _docx_add_step(doc, step_number, step_title, concept, lines)
-
-    _docx_add_result(doc, "\u03a6abs", phi_abs)
-
-    bio = io.BytesIO()
-    doc.save(bio)
-    bio.seek(0)
-    return bio.getvalue()
-
-
-def build_absolute_qy_pdf(data: dict) -> bytes:
-    """Genera un reporte .pdf con el desarrollo matematico paso a paso
-    del rendimiento cuantico absoluto (metodo de esfera integradora)."""
-    phi_abs, A, steps = _absolute_qy_steps(data)
-    bio = io.BytesIO()
-    doc = SimpleDocTemplate(bio, pagesize=letter, topMargin=0.8 * rl_inch, bottomMargin=0.8 * rl_inch)
-    styles = getSampleStyleSheet()
-
-    story = _pdf_header_story(
-        styles, "Rendimiento cuantico absoluto", data["timestamp"],
-        "Metodo absoluto (de Mello, Wittmann y Friend, 1997) con esfera integradora: usa las "
-        "areas de excitacion dispersada y de emision, medidas con y sin excitacion directa de "
-        "la muestra, para obtener el rendimiento cuantico sin necesitar una referencia externa."
-    )
-
-    story.append(Paragraph("<b>Datos de entrada</b>", styles["Heading2"]))
-    table_data = [
-        ["Parametro", "Valor (area integrada)"],
-        ["La \u2014 excitacion, referencia/blanco", f"{data['L_a']:.6g}"],
-        ["Lc \u2014 excitacion, con la muestra", f"{data['L_c']:.6g}"],
-        ["Ea \u2014 emision, excitacion indirecta", f"{data['E_a']:.6g}"],
-        ["Ec \u2014 emision, excitacion directa", f"{data['E_c']:.6g}"],
-    ]
-    tbl = Table(table_data, colWidths=[3.2 * rl_inch, 2.4 * rl_inch])
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#FEE2E2")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.HexColor("#7F1D1D")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#E5E7EB")),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#F9FAFB")]),
-    ]))
-    story.append(tbl)
-    story.append(Spacer(1, 16))
-
-    story.append(Paragraph("<b>Desarrollo matematico</b>", styles["Heading2"]))
-    story.append(Spacer(1, 6))
-    for step_number, step_title, concept, lines in steps:
-        story.extend(_pdf_step_story(styles, step_number, step_title, concept, lines))
-
-    story.extend(_pdf_result_story(styles, "\u03a6abs", phi_abs))
-
-    doc.build(story)
-    bio.seek(0)
-    return bio.getvalue()
-
-
 # ============================================================
 # Navegacion global (sidebar) - vacia en Inicio, con enlaces en el resto
 # ============================================================
@@ -2914,7 +2766,7 @@ if st.session_state["active_page"] == "Visor de espectros":
 # ============================================================
 if st.session_state["active_page"] == "Rendimiento cuantico":
     st.title("Rendimiento cuantico relativo")
-    st.caption("Calcula el rendimiento cuantico de fluorescencia por metodo relativo usando una referencia conocida.")
+    st.caption("Calcula rendimiento cuantico relativo para muestras en solucion o para solidos usando reflectancia.")
 
     show_explanations = st.toggle(
         "Mostrar explicaciones conceptuales",
@@ -2927,7 +2779,10 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         "sin importar esta opcion."
     )
 
-    tab_rel = st.container()
+    tab_rel, tab_solid = st.tabs([
+        "Solucion",
+        "Solidos",
+    ])
 
     # ======================================================
     # Seccion: rendimiento cuantico RELATIVO
@@ -3068,6 +2923,122 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
                         st.error(f"No se pudo generar el documento Word: {e}")
                 else:
                     st.info("Para exportar a Word instala la libreria 'python-docx' (pip install python-docx).")
+
+    # ======================================================
+    # Seccion: rendimiento cuantico RELATIVO EN SOLIDOS
+    # ======================================================
+    with tab_solid:
+        st.write(
+            "Usa areas integradas de emision y reflectancia difusa a la longitud de onda de excitacion. "
+            "Aqui se estima la fraccion aparente absorbida como A = 1 - R, con R en fraccion."
+        )
+        st.caption(
+            "Este calculo se reporta como rendimiento cuantico relativo para solidos. Es adecuado para "
+            "comparar muestras y referencias solidas medidas bajo condiciones equivalentes."
+        )
+
+        col_s_in, col_s_out = st.columns([1, 1.2], gap="large")
+
+        with col_s_in:
+            st.markdown("#### Datos de entrada")
+
+            st.markdown("##### Muestra solida")
+            solid_sample_area = area_input(
+                "Area integrada de emision (muestra solida)", "solid_sample_area", default_value=1.0,
+                help_text="Ix: area bajo la curva del espectro de emision de la muestra solida.",
+            )
+            solid_sample_r_percent = st.number_input(
+                "Reflectancia R% a la excitacion (muestra)", min_value=0.000001, max_value=99.999999,
+                value=40.0, format="%.6f", key="solid_sample_r_percent",
+                help="Reflectancia difusa de la muestra en porcentaje, medida a la longitud de onda de excitacion.",
+            )
+
+            st.markdown("---")
+            st.markdown("##### Referencia solida")
+            solid_ref_phi = st.number_input(
+                "Phi referencia solida", min_value=0.0, max_value=1.0,
+                value=0.55, format="%.6f", key="solid_ref_phi",
+                help="Rendimiento cuantico conocido de la referencia solida.",
+            )
+            solid_ref_area = area_input(
+                "Area integrada de emision (referencia solida)", "solid_ref_area", default_value=1.0,
+                help_text="Iref: area bajo la curva del espectro de emision de la referencia solida.",
+            )
+            solid_ref_r_percent = st.number_input(
+                "Reflectancia R% a la excitacion (referencia)", min_value=0.000001, max_value=99.999999,
+                value=40.0, format="%.6f", key="solid_ref_r_percent",
+                help="Reflectancia difusa de la referencia en porcentaje, medida a la longitud de onda de excitacion.",
+            )
+
+        with col_s_out:
+            st.markdown("#### Formula y desarrollo")
+            solid_sample_R = solid_sample_r_percent / 100.0
+            solid_ref_R = solid_ref_r_percent / 100.0
+            solid_sample_A = 1.0 - solid_sample_R
+            solid_ref_A = 1.0 - solid_ref_R
+            solid_ratio_area = solid_sample_area / solid_ref_area
+            solid_ratio_abs = solid_ref_A / solid_sample_A
+            solid_phi = solid_ref_phi * solid_ratio_area * solid_ratio_abs
+
+            st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)")
+            st.latex(r"A = 1 - R,\quad R = \frac{R\%}{100}")
+
+            st.markdown("**Paso 1.** Convertir reflectancia de porcentaje a fraccion:")
+            if show_explanations:
+                st.caption("R debe usarse como fraccion. Por ejemplo, 40% se convierte en 0.40.")
+            st.latex(fr"R_x = \frac{{{solid_sample_r_percent:.4g}}}{{100}} = {solid_sample_R:.4g}")
+            st.latex(fr"R_{{ref}} = \frac{{{solid_ref_r_percent:.4g}}}{{100}} = {solid_ref_R:.4g}")
+
+            st.markdown("**Paso 2.** Estimar la fraccion aparente absorbida:")
+            if show_explanations:
+                st.caption("A = 1 - R estima la fraccion de luz que no fue reflejada por el solido.")
+            st.latex(fr"A_x = 1 - {solid_sample_R:.4g} = {solid_sample_A:.4g}")
+            st.latex(fr"A_{{ref}} = 1 - {solid_ref_R:.4g} = {solid_ref_A:.4g}")
+
+            st.markdown("**Paso 3.** Calcular razon de areas de emision:")
+            if show_explanations:
+                st.caption("Esta razon compara la emision integrada de la muestra contra la referencia.")
+            st.latex(fr"\frac{{I_x}}{{I_{{ref}}}} = \frac{{{solid_sample_area:.4g}}}{{{solid_ref_area:.4g}}} = {solid_ratio_area:.4g}")
+
+            st.markdown("**Paso 4.** Corregir por la fraccion aparente absorbida:")
+            if show_explanations:
+                st.caption("Si una muestra absorbe mas luz de excitacion, su emision debe corregirse para compararla justamente.")
+            st.latex(fr"\frac{{A_{{ref}}}}{{A_x}} = \frac{{{solid_ref_A:.4g}}}{{{solid_sample_A:.4g}}} = {solid_ratio_abs:.4g}")
+
+            st.markdown("**Paso 5.** Sustituir en la formula relativa:")
+            st.latex(
+                fr"\Phi_x = {solid_ref_phi:.4g}\left({solid_ratio_area:.4g}\right)"
+                fr"\left({solid_ratio_abs:.4g}\right) = {solid_phi:.4g}"
+            )
+
+            st.metric("Rendimiento cuantico relativo del solido", f"{solid_phi:.4f}", f"{solid_phi * 100:.2f}%")
+
+            if solid_phi > 1:
+                st.warning(
+                    "El resultado es mayor que 1. Revisa reflectancias, areas integradas y que la referencia "
+                    "sea comparable con la muestra."
+                )
+
+            solid_df = pd.DataFrame([{
+                "Phi_sample_solid": solid_phi,
+                "Phi_sample_solid_%": solid_phi * 100.0,
+                "Phi_reference": solid_ref_phi,
+                "Sample_area": solid_sample_area,
+                "Reference_area": solid_ref_area,
+                "Sample_R_percent": solid_sample_r_percent,
+                "Reference_R_percent": solid_ref_r_percent,
+                "Sample_A_1_minus_R": solid_sample_A,
+                "Reference_A_1_minus_R": solid_ref_A,
+            }])
+            csv_solid = io.StringIO()
+            solid_df.to_csv(csv_solid, index=False)
+            st.download_button(
+                "Descargar CSV",
+                data=csv_solid.getvalue(),
+                file_name="rendimiento_cuantico_relativo_solidos.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
     # ======================================================
     # Seccion: rendimiento cuantico ABSOLUTO
