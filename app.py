@@ -2334,6 +2334,35 @@ if st.session_state["active_page"] == "Aprender":
     if "learn_topic" not in st.session_state:
         st.session_state["learn_topic"] = "CIE 1931"
 
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stImage"] {
+            text-align: center;
+        }
+        div[data-testid="stImage"] img {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            border-radius: 6px;
+        }
+        div[data-testid="stCaptionContainer"] p {
+            font-size: 0.82rem;
+            line-height: 1.25;
+            text-align: center;
+        }
+        div[data-testid="stMarkdownContainer"] h3 {
+            margin-top: 1.35rem;
+        }
+        div[data-testid="stMarkdownContainer"] h4 {
+            margin-top: 0.85rem;
+            margin-bottom: 0.35rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("Aprender")
     _topics = ["CIE 1931", "Visor de espectros", "Rendimiento cuantico"]
     _default_topic = st.session_state["learn_topic"] if st.session_state["learn_topic"] in _topics else _topics[0]
@@ -2344,48 +2373,41 @@ if st.session_state["active_page"] == "Aprender":
 
     if topic == "CIE 1931":
         st.markdown("### Que son las coordenadas CIE 1931")
-        st.write(
-            "CIE 1931 es uno de los sistemas colorimetricos mas usados para representar colores "
-            "a partir de la respuesta visual humana. Fue publicado en 1931 por la Commission "
-            "Internationale de l'Eclairage, tambien conocida como CIE."
-        )
-        st.write(
-            "El diagrama CIE 1931 usa dos coordenadas, x e y, para describir la cromaticidad "
-            "de una fuente luminosa. En este caso, la fuente es el espectro de emision que subes "
-            "a la aplicacion."
-        )
-        st.write(
-            "La ventaja de este sistema es que separa la informacion de color de la intensidad total. "
-            "Por eso dos espectros con intensidades distintas pueden tener coordenadas x,y similares "
-            "si su distribucion espectral produce una percepcion de color parecida."
-        )
-        st.markdown("### Para que sirve en espectros de emision")
-        st.write(
-            "En materiales luminiscentes, LEDs, fosforos, colorantes o complejos emisores, "
-            "las coordenadas CIE permiten comparar rapidamente el color emitido por diferentes muestras."
-        )
-        st.markdown("### Como se calculan")
-        st.write(
-            "El calculo parte del espectro de emision: longitud de onda contra intensidad. "
-            "Ese espectro se combina con las funciones de igualacion de color del observador "
-            "estandar CIE 1931 de 2 grados."
-        )
-        st.latex(r"X = \int I(\lambda)\,\overline{x}(\lambda)\,d\lambda")
-        st.latex(r"Y = \int I(\lambda)\,\overline{y}(\lambda)\,d\lambda")
-        st.latex(r"Z = \int I(\lambda)\,\overline{z}(\lambda)\,d\lambda")
-        st.write(
-            "Aqui, I(lambda) es la intensidad del espectro de emision, y xbar, ybar, zbar "
-            "son las funciones colorimetricas CIE. En el codigo, estas integrales se calculan "
-            "numericamente con la regla trapezoidal."
-        )
-        st.write("Despues se normalizan los valores XYZ para obtener las coordenadas cromaticas:")
-        st.latex(r"x = \frac{X}{X + Y + Z}")
-        st.latex(r"y = \frac{Y}{X + Y + Z}")
-        st.write(
-            "Esas coordenadas x,y son las que se ubican sobre el diagrama CIE 1931. "
-            "La longitud dominante y la pureza se estiman trazando una linea desde el punto blanco "
-            "hasta la coordenada de la muestra y buscando su interseccion con el borde del diagrama."
-        )
+        cie_intro, cie_math = st.columns([1.05, 1], gap="large")
+        with cie_intro:
+            st.write(
+                "CIE 1931 es uno de los sistemas colorimetricos mas usados para representar colores "
+                "a partir de la respuesta visual humana. Fue publicado en 1931 por la Commission "
+                "Internationale de l'Eclairage, tambien conocida como CIE."
+            )
+            st.write(
+                "El diagrama usa dos coordenadas, x e y, para describir la cromaticidad de una fuente "
+                "luminosa. En esta aplicacion, esa fuente es el espectro de emision que subes."
+            )
+            st.write(
+                "Su ventaja es que separa el color de la intensidad total. Dos espectros con intensidades "
+                "distintas pueden tener coordenadas x,y similares si producen una percepcion de color parecida."
+            )
+            st.markdown("#### En espectros de emision")
+            st.write(
+                "En materiales luminiscentes, LEDs, fosforos, colorantes o complejos emisores, estas "
+                "coordenadas permiten comparar rapidamente el color emitido por diferentes muestras."
+            )
+        with cie_math:
+            st.markdown("#### Como se calculan")
+            st.write(
+                "El espectro de emision se combina con las funciones de igualacion de color del observador "
+                "estandar CIE 1931 de 2 grados."
+            )
+            st.latex(r"X = \int I(\lambda)\,\overline{x}(\lambda)\,d\lambda")
+            st.latex(r"Y = \int I(\lambda)\,\overline{y}(\lambda)\,d\lambda")
+            st.latex(r"Z = \int I(\lambda)\,\overline{z}(\lambda)\,d\lambda")
+            st.write("Despues se normalizan los valores XYZ:")
+            st.latex(r"x = \frac{X}{X + Y + Z}")
+            st.latex(r"y = \frac{Y}{X + Y + Z}")
+            st.write(
+                "Esas coordenadas x,y son las que se ubican sobre el diagrama CIE 1931."
+            )
         st.markdown("### Ejemplo interactivo")
         st.write(
             "Sube un archivo con dos columnas: longitud de onda en nm e intensidad. "
@@ -2537,10 +2559,10 @@ if st.session_state["active_page"] == "Aprender":
                 r4.metric("x", f"{x_coord:.4f}")
                 r5.metric("y", f"{y_coord:.4f}")
 
-                plot_col, cie_col = st.columns(2)
+                _, plot_col, cie_col, _ = st.columns([0.05, 1, 1, 0.05], gap="large")
                 with plot_col:
                     st.markdown("#### Espectro de emision")
-                    fig_example, ax_example = plt.subplots(figsize=(5, 4))
+                    fig_example, ax_example = plt.subplots(figsize=(4.6, 3.45))
                     ax_example.plot(wl_grid, intensity_grid, color="#1f77b4", label="Espectro interpolado")
                     ax_example.set_xlabel("Longitud de onda (nm)")
                     ax_example.set_ylabel("Intensidad (u.a.)")
@@ -2550,7 +2572,7 @@ if st.session_state["active_page"] == "Aprender":
 
                 with cie_col:
                     st.markdown("#### Punto en el diagrama CIE")
-                    fig_cie_example, ax_cie_example = plt.subplots(figsize=(5, 4))
+                    fig_cie_example, ax_cie_example = plt.subplots(figsize=(4.6, 3.45))
                     try:
                         try:
                             fig_cie_example, ax_cie_example = colour.plotting.plot_chromaticity_diagram_CIE1931(show=False)
@@ -2840,7 +2862,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["franck_condon"],
                     caption="Diagrama de Franck-Condon. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=360,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Franck-Condon-diagram.png)"
@@ -2925,7 +2947,7 @@ if st.session_state["active_page"] == "Aprender":
                 "regresa desde la superficie, que puede incluir contribuciones especulares y difusas."
             )
 
-            _, uv_text, uv_img, _ = st.columns([0.08, 1, 1, 0.08])
+            _, uv_text, uv_img, _ = st.columns([0.12, 1, 1, 0.12], gap="large")
             with uv_text:
                 st.markdown("#### UV-Vis de absorcion")
                 st.write(
@@ -2938,13 +2960,13 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["uvvis"],
                     caption="Esquema de un espectrofotometro UV-Vis. Fuente: Wikimedia Commons.",
-                    width=390,
+                    width=360,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Schematic_of_UV-_visible_spectrophotometer-en.svg)"
                 )
 
-            _, fl_text, fl_img, _ = st.columns([0.08, 1, 1, 0.08])
+            _, fl_text, fl_img, _ = st.columns([0.12, 1, 1, 0.12], gap="large")
             with fl_text:
                 st.markdown("#### Fluorimetro")
                 st.write(
@@ -2957,13 +2979,13 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["fluorimeter"],
                     caption="Disposicion optica de un espectrofotometro de fluorescencia. Fuente: Wikimedia Commons.",
-                    width=390,
+                    width=360,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Fluorescence_spectrophotometer_layout.png)"
                 )
 
-            _, ref_text, ref_img, _ = st.columns([0.08, 1, 1, 0.08])
+            _, ref_text, ref_img, _ = st.columns([0.12, 1, 1, 0.12], gap="large")
             with ref_text:
                 st.markdown("#### Reflectancia difusa en solidos")
                 st.write(
@@ -2979,7 +3001,7 @@ if st.session_state["active_page"] == "Aprender":
                         "Principio de una esfera integradora para medir reflectancia y transmitancia. "
                         "Fuente: Wikimedia Commons."
                     ),
-                    width=390,
+                    width=360,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
@@ -3086,7 +3108,7 @@ if st.session_state["active_page"] == "Aprender":
             left_h = wl_m[above[0]]
             right_h = wl_m[above[-1]]
 
-            fig_met, ax_met = plt.subplots(figsize=(8, 4))
+            fig_met, ax_met = plt.subplots(figsize=(5.2, 3.55))
             ax_met.plot(wl_m, y_m, color="#7c3aed", linewidth=2)
             ax_met.axvline(peak_wl, color="#dc2626", linestyle="--", label=f"lambda max = {peak_wl:.0f} nm")
             ax_met.hlines(half_y, left_h, right_h, color="#059669", linewidth=2, label=f"FWHM = {right_h-left_h:.0f} nm")
@@ -3095,17 +3117,18 @@ if st.session_state["active_page"] == "Aprender":
             ax_met.set_ylabel("Intensidad")
             ax_met.grid(alpha=0.25)
             ax_met.legend(loc="best")
-            show_and_close(fig_met)
-
-            st.latex(r"\lambda_{max}: \mathrm{longitud\ de\ onda\ del\ maximo}")
-            st.latex(r"Area = \int_{\lambda_1}^{\lambda_2} I(\lambda)\,d\lambda")
-            st.latex(r"FWHM = \lambda_{derecha,\,1/2} - \lambda_{izquierda,\,1/2}")
-            st.latex(r"Centroide = \frac{\int \lambda I(\lambda)\,d\lambda}{\int I(\lambda)\,d\lambda}")
-            st.write(
-                "El centroide es util cuando la banda es ancha o tiene hombros, porque usa toda la distribucion "
-                "espectral. El FWHM es sensible al ruido y a lineas base incorrectas; si la mitad de altura se "
-                "calcula desde una base desplazada, el ancho puede salir artificialmente grande."
-            )
+            met_graph, met_text = st.columns([1, 1], gap="large")
+            with met_graph:
+                show_and_close(fig_met)
+            with met_text:
+                st.latex(r"\lambda_{max}: \mathrm{longitud\ de\ onda\ del\ maximo}")
+                st.latex(r"Area = \int_{\lambda_1}^{\lambda_2} I(\lambda)\,d\lambda")
+                st.latex(r"FWHM = \lambda_{derecha,\,1/2} - \lambda_{izquierda,\,1/2}")
+                st.latex(r"Centroide = \frac{\int \lambda I(\lambda)\,d\lambda}{\int I(\lambda)\,d\lambda}")
+                st.write(
+                    "El centroide es util cuando la banda es ancha o tiene hombros, porque usa toda la distribucion "
+                    "espectral. El FWHM es sensible al ruido y a lineas base incorrectas."
+                )
 
             st.markdown("### Desplazamiento de Stokes")
             st.write(
@@ -3132,15 +3155,12 @@ if st.session_state["active_page"] == "Aprender":
                 "cantidad. Si normalizas a maximo, pierdes informacion de intensidad relativa. Si normalizas "
                 "a area, comparas distribucion espectral, pero no rendimiento ni brillo."
             )
-            st.latex(r"I_{max=1}(\lambda) = \frac{I(\lambda)}{\max(|I|)}")
-            st.latex(r"I_{area=1}(\lambda) = \frac{I(\lambda)}{\int |I(\lambda)|\,d\lambda}")
-
             wl_n = np.linspace(350, 750, 600)
             y1 = 3.0 * _gaussian(wl_n, 520, 35, 1.0)
             y2 = 0.9 * _gaussian(wl_n, 590, 55, 1.0)
             y1n = y1 / np.max(y1)
             y2n = y2 / np.max(y2)
-            fig_norm, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(9, 3.5))
+            fig_norm, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(6.2, 3.2))
             ax_a.plot(wl_n, y1, label="Muestra A", color="#1f77b4")
             ax_a.plot(wl_n, y2, label="Muestra B", color="#d62728")
             ax_a.set_title("Intensidad original")
@@ -3156,7 +3176,16 @@ if st.session_state["active_page"] == "Aprender":
             ax_b.grid(alpha=0.25)
             ax_b.legend(fontsize=8)
             fig_norm.tight_layout()
-            show_and_close(fig_norm)
+            norm_graph, norm_text = st.columns([1.05, 1], gap="large")
+            with norm_graph:
+                show_and_close(fig_norm)
+            with norm_text:
+                st.latex(r"I_{max=1}(\lambda) = \frac{I(\lambda)}{\max(|I|)}")
+                st.latex(r"I_{area=1}(\lambda) = \frac{I(\lambda)}{\int |I(\lambda)|\,d\lambda}")
+                st.write(
+                    "La normalizacion a maximo compara forma. La normalizacion a area compara distribucion "
+                    "espectral. Ninguna de las dos conserva por si sola informacion de brillo absoluto."
+                )
 
             st.markdown("### Suavizado y linea base")
             st.write(
@@ -3183,13 +3212,13 @@ if st.session_state["active_page"] == "Aprender":
                 "de barrido, correccion instrumental, concentracion y geometria."
             )
 
-            bp1, bp2 = st.columns(2)
+            _, bp1, bp2, _ = st.columns([0.06, 1, 1, 0.06], gap="large")
             with bp1:
                 st.markdown("#### Cubetas y blanco")
                 st.image(
                     viewer_image_sources["cuvettes"],
                     caption="Cubetas para espectrofotometria. Fuente: Wikimedia Commons.",
-                    width=280,
+                    width=260,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Spectrophotometer_cuvettes.JPG)"
@@ -3204,7 +3233,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["cuvette_in_spectrophotometer"],
                     caption="Cubeta colocada en un espectrofotometro. Fuente: Wikimedia Commons.",
-                    width=320,
+                    width=260,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:A_cuvette_in_a_spectrophotometer.jpg)"
@@ -3215,13 +3244,13 @@ if st.session_state["active_page"] == "Aprender":
                     "y emitida que llega al detector."
                 )
 
-            bp3, bp4 = st.columns(2)
+            _, bp3, bp4, _ = st.columns([0.06, 1, 1, 0.06], gap="large")
             with bp3:
                 st.markdown("#### Portamuestras y temperatura")
                 st.image(
                     viewer_image_sources["cuvette_holder"],
                     caption="Soporte de cubeta con control de temperatura. Fuente: Wikimedia Commons.",
-                    width=280,
+                    width=260,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Cuvette_holder.jpg)"
@@ -3235,7 +3264,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["integrating_sphere"],
                     caption="Esfera integradora para reflectancia/transmitancia. Fuente: Wikimedia Commons.",
-                    width=340,
+                    width=260,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
@@ -3282,24 +3311,35 @@ if st.session_state["active_page"] == "Aprender":
 
     else:  # Rendimiento cuantico
         st.markdown("### Que es el rendimiento cuantico")
-        st.write(
-            "El rendimiento cuantico de fluorescencia (Phi) es la fraccion de fotones absorbidos que la "
-            "muestra reemite como fotones de fluorescencia. El metodo relativo compara el area de emision "
-            "integrada de la muestra contra la de una referencia de Phi conocido, medidas bajo la misma "
-            "longitud de onda de excitacion y en condiciones comparables."
-        )
-        st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
-        st.write(
-            "Donde I es el area de emision integrada, A es la absorbancia a la longitud de onda de "
-            "excitacion, y n es el indice de refraccion del solvente de cada muestra."
-        )
+        qy_text, qy_formula = st.columns([1.05, 1], gap="large")
+        with qy_text:
+            st.write(
+                "El rendimiento cuantico de fluorescencia (Phi) es la fraccion de fotones absorbidos que la "
+                "muestra reemite como fotones de fluorescencia."
+            )
+            st.write(
+                "El metodo relativo compara el area de emision integrada de la muestra contra la de una "
+                "referencia de Phi conocido, medidas bajo la misma longitud de onda de excitacion y en "
+                "condiciones comparables."
+            )
+        with qy_formula:
+            st.latex(r"\Phi_x = \Phi_{ref}\left(\frac{I_x}{I_{ref}}\right)\left(\frac{A_{ref}}{A_x}\right)\left(\frac{n_x^2}{n_{ref}^2}\right)")
+            st.write(
+                "I es el area de emision integrada, A es la absorbancia a la longitud de onda de excitacion "
+                "y n es el indice de refraccion del solvente."
+            )
         st.markdown("### Buenas practicas")
-        st.write(
-            "Mantener la absorbancia baja (tipicamente A < 0.05-0.1 en la longitud de onda de excitacion) "
-            "reduce los efectos de filtro interno y de reabsorcion, que de otro modo subestiman el area de "
-            "emision real. Tambien conviene medir varias diluciones y graficar area integrada contra "
-            "absorbancia: la pendiente de esa recta (en vez de un solo punto) da un Phi mas confiable."
-        )
+        qy_bp1, qy_bp2 = st.columns(2, gap="large")
+        with qy_bp1:
+            st.write(
+                "Mantener la absorbancia baja, tipicamente A < 0.05-0.1 en la longitud de onda de excitacion, "
+                "reduce los efectos de filtro interno y de reabsorcion."
+            )
+        with qy_bp2:
+            st.write(
+                "Tambien conviene medir varias diluciones y graficar area integrada contra absorbancia. "
+                "La pendiente de esa recta, en vez de un solo punto, da un Phi mas confiable."
+            )
 
     st.stop()
 
