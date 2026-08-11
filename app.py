@@ -2684,6 +2684,12 @@ if st.session_state["active_page"] == "Aprender":
                       ha="center", fontsize=10)
             return fig_d
 
+        viewer_image_sources = {
+            "franck_condon": "https://commons.wikimedia.org/wiki/Special:FilePath/Franck-Condon-diagram.png",
+            "uvvis": "https://commons.wikimedia.org/wiki/Special:FilePath/Schematic%20of%20UV-%20visible%20spectrophotometer-en.svg",
+            "fluorimeter": "https://commons.wikimedia.org/wiki/Special:FilePath/Fluorescence%20spectrophotometer%20layout.png",
+        }
+
         tabs_viewer_learn = st.tabs([
             "Fundamentos",
             "Equipos",
@@ -2733,6 +2739,32 @@ if st.session_state["active_page"] == "Aprender":
             ax_demo.legend(loc="best")
             show_and_close(fig_demo)
 
+            fc_text, fc_fig = st.columns([1.2, 1])
+            with fc_text:
+                st.markdown("### Imagen molecular del proceso")
+                st.write(
+                    "Una forma util de leer estos espectros es imaginar superficies de energia para el estado "
+                    "fundamental y el estado excitado. La absorcion ocurre muy rapido y suele representarse como "
+                    "una transicion vertical; despues la molecula pierde energia vibracional antes de emitir. "
+                    "Esa relajacion explica por que la emision aparece normalmente a longitudes de onda mas "
+                    "largas que la absorcion."
+                )
+                st.write(
+                    "La diferencia entre el maximo de absorcion y el maximo de emision se conoce como "
+                    "desplazamiento de Stokes. Un desplazamiento grande puede indicar reorganizacion estructural, "
+                    "transferencia de carga, interacciones fuertes con el solvente o estados excitados mas "
+                    "relajados antes de la fluorescencia."
+                )
+            with fc_fig:
+                st.image(
+                    viewer_image_sources["franck_condon"],
+                    caption="Diagrama de Franck-Condon. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Franck-Condon-diagram.png)"
+                )
+
             st.markdown("### Absorcion, excitacion y emision no son lo mismo")
             st.write(
                 "La absorcion indica que longitudes de onda toma la muestra desde la luz incidente. "
@@ -2762,12 +2794,30 @@ if st.session_state["active_page"] == "Aprender":
             eq1, eq2 = st.columns(2)
             with eq1:
                 st.markdown("#### UV-Vis de absorcion")
-                show_and_close(_draw_absorption_diagram())
+                st.image(
+                    viewer_image_sources["uvvis"],
+                    caption="Esquema de un espectrofotometro UV-Vis. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Schematic_of_UV-_visible_spectrophotometer-en.svg)"
+                )
             with eq2:
                 st.markdown("#### Fluorimetro")
-                show_and_close(_draw_fluorescence_diagram())
+                st.image(
+                    viewer_image_sources["fluorimeter"],
+                    caption="Disposicion optica de un espectrofotometro de fluorescencia. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Fluorescence_spectrophotometer_layout.png)"
+                )
 
             st.markdown("#### Reflectancia difusa en solidos")
+            st.caption(
+                "Para reflectancia difusa mantengo un esquema propio simplificado porque no encontre una imagen abierta "
+                "suficientemente clara y equivalente para este contexto."
+            )
             show_and_close(_draw_reflectance_diagram())
 
             st.markdown("### Que cambia experimentalmente")
