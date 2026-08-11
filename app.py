@@ -2913,8 +2913,8 @@ if st.session_state["active_page"] == "Visor de espectros":
 # Pagina: Rendimiento cuantico
 # ============================================================
 if st.session_state["active_page"] == "Rendimiento cuantico":
-    st.title("Rendimiento cuantico")
-    st.caption("Calcula el rendimiento cuantico de fluorescencia por metodo relativo o absoluto.")
+    st.title("Rendimiento cuantico relativo")
+    st.caption("Calcula el rendimiento cuantico de fluorescencia por metodo relativo usando una referencia conocida.")
 
     show_explanations = st.toggle(
         "Mostrar explicaciones conceptuales",
@@ -2927,7 +2927,7 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
         "sin importar esta opcion."
     )
 
-    tab_rel, tab_abs = st.tabs(["Rendimiento cuantico relativo", "Rendimiento cuantico absoluto"])
+    tab_rel = st.container()
 
     # ======================================================
     # Seccion: rendimiento cuantico RELATIVO
@@ -3072,7 +3072,7 @@ if st.session_state["active_page"] == "Rendimiento cuantico":
     # ======================================================
     # Seccion: rendimiento cuantico ABSOLUTO
     # ======================================================
-    with tab_abs:
+    if False:
         st.write(
             "Metodo de esfera integradora (de Mello, Wittmann y Friend, 1997): no necesita una "
             "referencia externa, pero requiere cuatro areas integradas medidas con el mismo montaje."
