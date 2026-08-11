@@ -2595,67 +2595,93 @@ if st.session_state["active_page"] == "Aprender":
             return amp * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
         def _draw_absorption_diagram():
-            fig_d, ax_d = plt.subplots(figsize=(8, 2.2))
+            fig_d, ax_d = plt.subplots(figsize=(10, 3.4))
             ax_d.set_axis_off()
-            boxes = [
-                (0.04, 0.42, 0.15, 0.25, "Fuente"),
-                (0.27, 0.42, 0.18, 0.25, "Monocromador"),
-                (0.54, 0.38, 0.16, 0.33, "Muestra"),
-                (0.79, 0.42, 0.15, 0.25, "Detector"),
+            ax_d.set_xlim(0, 1)
+            ax_d.set_ylim(0, 1)
+            modules = [
+                (0.04, 0.45, 0.13, 0.22, "Lampara\nD2/W"),
+                (0.22, 0.45, 0.14, 0.22, "Rendija\nentrada"),
+                (0.41, 0.39, 0.16, 0.34, "Monocromador\nred/prisma"),
+                (0.63, 0.34, 0.10, 0.44, "Cubeta\nmuestra"),
+                (0.81, 0.45, 0.13, 0.22, "Detector\nPMT/CCD"),
             ]
-            for x0, y0, w, h, label in boxes:
-                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, fill=False, linewidth=1.5))
-                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=10)
-            for x0, x1 in [(0.19, 0.27), (0.45, 0.54), (0.70, 0.79)]:
-                ax_d.annotate("", xy=(x1, 0.55), xytext=(x0, 0.55),
-                              arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.text(0.50, 0.12, "Absorcion/transmitancia: se compara I0 con I despues de atravesar la muestra",
-                      ha="center", fontsize=9)
+            colors = ["#fee2e2", "#fef3c7", "#dbeafe", "#dcfce7", "#ede9fe"]
+            for (x0, y0, w, h, label), color in zip(modules, colors):
+                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, facecolor=color, edgecolor="#374151", linewidth=1.4))
+                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=9)
+            for x0, x1, label in [
+                (0.17, 0.22, "luz blanca"),
+                (0.36, 0.41, "seleccion lambda"),
+                (0.57, 0.63, "I0"),
+                (0.73, 0.81, "I"),
+            ]:
+                ax_d.annotate("", xy=(x1, 0.56), xytext=(x0, 0.56),
+                              arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#b91c1c"))
+                ax_d.text((x0 + x1) / 2, 0.63, label, ha="center", fontsize=8, color="#7f1d1d")
+            ax_d.text(0.50, 0.18, "Se registra cuanta luz se pierde al atravesar la muestra.",
+                      ha="center", fontsize=10)
+            ax_d.text(0.50, 0.08, "Transmitancia: T = I/I0     Absorbancia: A = -log10(T)",
+                      ha="center", fontsize=10, color="#111827")
             return fig_d
 
         def _draw_fluorescence_diagram():
-            fig_d, ax_d = plt.subplots(figsize=(8, 2.4))
+            fig_d, ax_d = plt.subplots(figsize=(10, 3.6))
             ax_d.set_axis_off()
-            boxes = [
-                (0.04, 0.45, 0.15, 0.25, "Fuente"),
-                (0.28, 0.45, 0.17, 0.25, "Mono. exc."),
-                (0.56, 0.42, 0.15, 0.31, "Muestra"),
-                (0.77, 0.70, 0.17, 0.22, "Mono. em."),
-                (0.77, 0.18, 0.17, 0.22, "Detector"),
+            ax_d.set_xlim(0, 1)
+            ax_d.set_ylim(0, 1)
+            modules = [
+                (0.04, 0.48, 0.13, 0.20, "Fuente\nXe/LED"),
+                (0.22, 0.48, 0.15, 0.20, "Mono.\nexcitacion"),
+                (0.48, 0.41, 0.13, 0.34, "Cubeta\nmuestra"),
+                (0.70, 0.66, 0.16, 0.18, "Mono.\nemision"),
+                (0.70, 0.18, 0.16, 0.18, "Detector"),
             ]
-            for x0, y0, w, h, label in boxes:
-                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, fill=False, linewidth=1.5))
-                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=10)
-            ax_d.annotate("", xy=(0.28, 0.575), xytext=(0.19, 0.575),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.annotate("", xy=(0.56, 0.575), xytext=(0.45, 0.575),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.annotate("", xy=(0.77, 0.80), xytext=(0.71, 0.60),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.annotate("", xy=(0.85, 0.40), xytext=(0.85, 0.70),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.text(0.50, 0.08, "Fluorescencia: la excitacion entra por un camino y la emision se detecta normalmente a 90 grados",
-                      ha="center", fontsize=9)
+            colors = ["#fee2e2", "#dbeafe", "#dcfce7", "#fef3c7", "#ede9fe"]
+            for (x0, y0, w, h, label), color in zip(modules, colors):
+                ax_d.add_patch(plt.Rectangle((x0, y0), w, h, facecolor=color, edgecolor="#374151", linewidth=1.4))
+                ax_d.text(x0 + w / 2, y0 + h / 2, label, ha="center", va="center", fontsize=9)
+            ax_d.annotate("", xy=(0.22, 0.58), xytext=(0.17, 0.58),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#2563eb"))
+            ax_d.annotate("", xy=(0.48, 0.58), xytext=(0.37, 0.58),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#2563eb"))
+            ax_d.text(0.425, 0.65, "lambda exc", ha="center", fontsize=8, color="#1d4ed8")
+            ax_d.annotate("", xy=(0.70, 0.75), xytext=(0.61, 0.58),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#dc2626"))
+            ax_d.annotate("", xy=(0.78, 0.36), xytext=(0.78, 0.66),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#dc2626"))
+            ax_d.text(0.67, 0.63, "emision", ha="center", fontsize=8, color="#991b1b")
+            ax_d.text(0.50, 0.08, "Geometria tipica a 90 grados: reduce luz excitante dispersada que llega al detector.",
+                      ha="center", fontsize=10)
             return fig_d
 
         def _draw_reflectance_diagram():
-            fig_d, ax_d = plt.subplots(figsize=(8, 2.4))
+            fig_d, ax_d = plt.subplots(figsize=(10, 3.6))
             ax_d.set_axis_off()
-            ax_d.add_patch(plt.Circle((0.55, 0.52), 0.22, fill=False, linewidth=1.7))
-            ax_d.add_patch(plt.Rectangle((0.50, 0.40), 0.10, 0.08, fill=True, alpha=0.18))
-            ax_d.text(0.55, 0.44, "Solido", ha="center", va="center", fontsize=9)
-            ax_d.add_patch(plt.Rectangle((0.08, 0.42), 0.16, 0.22, fill=False, linewidth=1.5))
-            ax_d.text(0.16, 0.53, "Fuente", ha="center", va="center", fontsize=10)
-            ax_d.add_patch(plt.Rectangle((0.77, 0.42), 0.16, 0.22, fill=False, linewidth=1.5))
-            ax_d.text(0.85, 0.53, "Detector", ha="center", va="center", fontsize=10)
-            ax_d.annotate("", xy=(0.36, 0.53), xytext=(0.24, 0.53),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.annotate("", xy=(0.77, 0.53), xytext=(0.67, 0.53),
-                          arrowprops=dict(arrowstyle="->", linewidth=1.5))
-            ax_d.text(0.55, 0.80, "Esfera integradora / accesorio de reflectancia difusa",
+            ax_d.set_xlim(0, 1)
+            ax_d.set_ylim(0, 1)
+            ax_d.add_patch(plt.Rectangle((0.05, 0.48), 0.14, 0.20, facecolor="#fee2e2", edgecolor="#374151", linewidth=1.4))
+            ax_d.text(0.12, 0.58, "Fuente", ha="center", va="center", fontsize=10)
+            ax_d.add_patch(plt.Circle((0.52, 0.55), 0.25, facecolor="#f8fafc", edgecolor="#374151", linewidth=1.8))
+            ax_d.add_patch(plt.Circle((0.52, 0.55), 0.18, fill=False, edgecolor="#cbd5e1", linewidth=1.0, linestyle="--"))
+            ax_d.add_patch(plt.Rectangle((0.47, 0.39), 0.10, 0.07, facecolor="#fde68a", edgecolor="#92400e", linewidth=1.1))
+            ax_d.text(0.52, 0.425, "polvo/\npelicula", ha="center", va="center", fontsize=8)
+            ax_d.add_patch(plt.Rectangle((0.80, 0.48), 0.14, 0.20, facecolor="#ede9fe", edgecolor="#374151", linewidth=1.4))
+            ax_d.text(0.87, 0.58, "Detector", ha="center", va="center", fontsize=10)
+            ax_d.annotate("", xy=(0.30, 0.58), xytext=(0.19, 0.58),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#2563eb"))
+            ax_d.annotate("", xy=(0.80, 0.58), xytext=(0.71, 0.58),
+                          arrowprops=dict(arrowstyle="->", linewidth=1.7, color="#059669"))
+            for ang in np.linspace(35, 145, 6):
+                x0, y0 = 0.52, 0.46
+                dx = 0.13 * np.cos(np.deg2rad(ang))
+                dy = 0.13 * np.sin(np.deg2rad(ang))
+                ax_d.annotate("", xy=(x0 + dx, y0 + dy), xytext=(x0, y0),
+                              arrowprops=dict(arrowstyle="->", linewidth=0.9, color="#64748b"))
+            ax_d.text(0.52, 0.84, "Accesorio de reflectancia difusa / esfera integradora",
                       ha="center", fontsize=10)
-            ax_d.text(0.50, 0.12, "Reflectancia: se mide la luz devuelta por polvos, peliculas o superficies",
-                      ha="center", fontsize=9)
+            ax_d.text(0.50, 0.10, "Se registra R: fraccion de luz reflejada/dispersada por el solido.",
+                      ha="center", fontsize=10)
             return fig_d
 
         tabs_viewer_learn = st.tabs([
@@ -2674,11 +2700,22 @@ if st.session_state["active_page"] == "Aprender":
                 "La forma de la banda contiene informacion sobre niveles electronicos, entorno quimico, "
                 "vibraciones, agregacion, defectos, dispersidad y rigidez del medio."
             )
+            st.write(
+                "Una banda espectral casi nunca es una linea infinitamente delgada. Suele ser ancha porque "
+                "muchas transiciones vibracionales, conformaciones y microambientes contribuyen al mismo "
+                "proceso electronico. Por eso, ademas del maximo, importan la anchura, la asimetria, los "
+                "hombros y la cola de la banda."
+            )
             st.latex(r"E = \frac{hc}{\lambda}")
             st.latex(r"E(\mathrm{eV}) \approx \frac{1240}{\lambda(\mathrm{nm})}")
             st.write(
                 "Longitudes de onda pequenas corresponden a fotones de mayor energia. Por eso un cambio "
                 "de 400 a 500 nm no representa el mismo cambio energetico que uno de 700 a 800 nm."
+            )
+            st.write(
+                "Cuando quieres comparar desplazamientos entre muestras, convertir nm a eV o cm-1 ayuda a "
+                "interpretar cambios energeticos reales. El eje en nm es practico para instrumentacion, "
+                "pero no es lineal en energia."
             )
 
             wl_demo = np.linspace(300, 750, 600)
@@ -2702,6 +2739,11 @@ if st.session_state["active_page"] == "Aprender":
                 "La excitacion mide que longitudes de onda producen emision cuando se observa una longitud "
                 "de emision fija. La emision mide que luz sale de la muestra cuando se excita a una longitud fija."
             )
+            st.write(
+                "Si excitacion y absorcion se parecen, normalmente la especie que absorbe tambien es la que "
+                "emite. Si no se parecen, puede haber transferencia de energia, impurezas emisoras, agregacion, "
+                "reabsorcion o una longitud de deteccion mal escogida."
+            )
 
         with tabs_viewer_learn[1]:
             st.markdown("### Esquemas de equipos")
@@ -2709,6 +2751,12 @@ if st.session_state["active_page"] == "Aprender":
                 "Los equipos cambian segun el tipo de medicion. En absorcion se mide luz transmitida; "
                 "en fluorescencia se separan excitacion y emision; en reflectancia difusa se recoge luz "
                 "dispersada por una superficie o polvo."
+            )
+            st.write(
+                "La geometria define que pregunta experimental responde el espectro. En UV-Vis se compara "
+                "I0 contra I despues de atravesar la muestra. En fluorescencia se excita por un camino y se "
+                "detecta la emision por otro, normalmente a 90 grados. En reflectancia se observa la luz que "
+                "regresa desde la superficie, que puede incluir contribuciones especulares y difusas."
             )
 
             eq1, eq2 = st.columns(2)
@@ -2729,6 +2777,23 @@ if st.session_state["active_page"] == "Aprender":
                 "instrumental y evitar filtro interno. En solidos, la preparacion de la superficie, el tamano "
                 "de particula y la dispersion pueden cambiar mucho el espectro."
             )
+            st.markdown("### Componentes importantes")
+            st.write(
+                "**Fuente:** determina el rango util. Deuterio cubre UV, tungsteno-halogeno cubre visible/NIR "
+                "y xenon es comun en fluorimetros por su intensidad amplia."
+            )
+            st.write(
+                "**Monocromador o filtros:** seleccionan la longitud de onda. Rendijas abiertas dan mas senal "
+                "pero menor resolucion; rendijas cerradas mejoran resolucion pero bajan intensidad."
+            )
+            st.write(
+                "**Detector:** transforma luz en senal electrica. PMT es muy sensible para fluorescencia; "
+                "fotodiodos y arreglos CCD son frecuentes en UV-Vis y equipos multicanal."
+            )
+            st.write(
+                "**Portamuestras:** cubeta, celda de solido, soporte de pelicula o accesorio de reflectancia. "
+                "Cambiar el portamuestras puede cambiar la senal aunque el material sea el mismo."
+            )
 
         with tabs_viewer_learn[2]:
             st.markdown("### Absorcion")
@@ -2740,6 +2805,11 @@ if st.session_state["active_page"] == "Aprender":
             st.latex(r"A = -\log_{10}(T) = \log_{10}\left(\frac{I_0}{I}\right)")
             st.write("En soluciones diluidas suele aplicarse la ley de Beer-Lambert:")
             st.latex(r"A = \varepsilon b c")
+            st.write(
+                "En esta expresion, epsilon es la absortividad molar, b es la longitud de paso optico "
+                "y c la concentracion. La relacion es lineal cuando la muestra esta suficientemente diluida, "
+                "la luz es razonablemente monocromatica y no hay dispersion, agregacion o reacciones fotoquimicas."
+            )
 
             st.markdown("### Emision")
             st.write(
@@ -2747,6 +2817,11 @@ if st.session_state["active_page"] == "Aprender":
                 "El maximo de emision se asocia con el estado excitado relajado antes de emitir."
             )
             st.latex(r"I_{em}(\lambda_{em}) \quad \mathrm{con}\quad \lambda_{exc}\ \mathrm{fija}")
+            st.write(
+                "La intensidad de emision no depende solo de cuanto emite el compuesto. Tambien depende de "
+                "cuanta luz absorbe, de la concentracion, oxigeno, solvente, temperatura, rendijas, ganancia "
+                "del detector y correccion instrumental."
+            )
 
             st.markdown("### Excitacion")
             st.write(
@@ -2754,6 +2829,11 @@ if st.session_state["active_page"] == "Aprender":
                 "Si no hay procesos raros, el espectro de excitacion suele parecerse al de absorcion del cromoforo emisor."
             )
             st.latex(r"I_{em}(\lambda_{det}) \quad \mathrm{mientras}\quad \lambda_{exc}\ \mathrm{varia}")
+            st.write(
+                "Este espectro ayuda a identificar que especies alimentan la emision. Una banda intensa en "
+                "absorcion que no aparece en excitacion puede pertenecer a una especie no emisora o a una "
+                "ruta que no transfiere energia eficientemente hacia el estado emisor observado."
+            )
 
             st.markdown("### Reflectancia difusa")
             st.write(
@@ -2763,12 +2843,22 @@ if st.session_state["active_page"] == "Aprender":
             )
             st.latex(r"A_{aparente} \approx 1 - R")
             st.latex(r"F(R) = \frac{(1-R)^2}{2R}")
+            st.write(
+                "Para solidos, R debe reportarse con cuidado: reflectancia difusa, especular o total no son "
+                "equivalentes. La compactacion del polvo, tamano de particula, rugosidad, espesor de pelicula "
+                "y soporte pueden cambiar el espectro sin que cambie la molecula."
+            )
 
         with tabs_viewer_learn[3]:
             st.markdown("### Metricas que calcula o puede calcular el visor")
             st.write(
                 "Las metricas resumen una curva completa en pocos numeros. Sirven para comparar muestras, "
                 "condiciones de solvente, concentracion, estado solido vs solucion o tratamientos termicos."
+            )
+            st.write(
+                "Ninguna metrica reemplaza mirar la curva completa. Dos espectros pueden tener el mismo "
+                "lambda max y areas parecidas, pero diferir en hombros, colas, asimetria o contribuciones "
+                "de mas de una especie. Por eso el visor debe mostrar grafica y tabla juntas."
             )
 
             wl_m = np.linspace(430, 720, 500)
@@ -2796,6 +2886,11 @@ if st.session_state["active_page"] == "Aprender":
             st.latex(r"Area = \int_{\lambda_1}^{\lambda_2} I(\lambda)\,d\lambda")
             st.latex(r"FWHM = \lambda_{derecha,\,1/2} - \lambda_{izquierda,\,1/2}")
             st.latex(r"Centroide = \frac{\int \lambda I(\lambda)\,d\lambda}{\int I(\lambda)\,d\lambda}")
+            st.write(
+                "El centroide es util cuando la banda es ancha o tiene hombros, porque usa toda la distribucion "
+                "espectral. El FWHM es sensible al ruido y a lineas base incorrectas; si la mitad de altura se "
+                "calcula desde una base desplazada, el ancho puede salir artificialmente grande."
+            )
 
             st.markdown("### Desplazamiento de Stokes")
             st.write(
@@ -2805,12 +2900,22 @@ if st.session_state["active_page"] == "Aprender":
             )
             st.latex(r"\Delta \tilde{\nu}(\mathrm{cm}^{-1}) = 10^7\left(\frac{1}{\lambda_{abs}} - \frac{1}{\lambda_{em}}\right)")
             st.latex(r"\Delta E(\mathrm{eV}) = 1240\left(\frac{1}{\lambda_{abs}} - \frac{1}{\lambda_{em}}\right)")
+            st.write(
+                "Un Stokes shift grande suele indicar reorganizacion estructural, relajacion del solvente, "
+                "transferencia de carga o cambios importantes entre estado fundamental y excitado. Un Stokes "
+                "shift muy pequeno puede aumentar la reabsorcion porque absorcion y emision se solapan."
+            )
 
         with tabs_viewer_learn[4]:
             st.markdown("### Normalizacion")
             st.write(
                 "Normalizar cambia la escala vertical para facilitar comparaciones. No cambia la posicion "
                 "de los picos, pero si cambia areas e intensidades absolutas."
+            )
+            st.write(
+                "Por eso conviene distinguir entre graficas para comparar forma y graficas para comparar "
+                "cantidad. Si normalizas a maximo, pierdes informacion de intensidad relativa. Si normalizas "
+                "a area, comparas distribucion espectral, pero no rendimiento ni brillo."
             )
             st.latex(r"I_{max=1}(\lambda) = \frac{I(\lambda)}{\max(|I|)}")
             st.latex(r"I_{area=1}(\lambda) = \frac{I(\lambda)}{\int |I(\lambda)|\,d\lambda}")
@@ -2849,6 +2954,11 @@ if st.session_state["active_page"] == "Aprender":
                 "En el visor, una correccion simple es restar el minimo. Para datos exigentes, una linea "
                 "base ajustada por regiones sin senal suele ser mas robusta."
             )
+            st.write(
+                "El suavizado debe usarse con moderacion. Una ventana demasiado grande puede desplazar maximos, "
+                "borrar hombros o disminuir picos estrechos. Para publicar o reportar resultados conviene indicar "
+                "si el espectro fue suavizado y con que parametros."
+            )
 
         with tabs_viewer_learn[5]:
             st.markdown("### Buenas practicas para cargar y comparar espectros")
@@ -2867,6 +2977,16 @@ if st.session_state["active_page"] == "Aprender":
                 {"Revision": "Solidos", "Que mirar": "Superficie, granulometria y compactacion consistentes", "Riesgo": "Dispersión cambia la forma del espectro"},
             ])
             st.dataframe(qc_rows, use_container_width=True, hide_index=True)
+
+            st.markdown("### Diagnostico rapido de problemas comunes")
+            trouble_rows = pd.DataFrame([
+                {"Problema observado": "Pico plano o cortado", "Causa probable": "Detector saturado o ganancia alta", "Que hacer": "Bajar concentracion, rendijas o ganancia"},
+                {"Problema observado": "Linea base inclinada", "Causa probable": "Blanco inadecuado, dispersion o deriva instrumental", "Que hacer": "Repetir blanco y corregir linea base"},
+                {"Problema observado": "Emision muy baja", "Causa probable": "Muestra poco emisora, oxidacion, filtro interno o lambda exc incorrecta", "Que hacer": "Revisar absorcion, desoxigenar o cambiar lambda exc"},
+                {"Problema observado": "Excitacion no coincide con absorcion", "Causa probable": "Impurezas, transferencia de energia o especie no emisora", "Que hacer": "Cambiar lambda deteccion y comparar con controles"},
+                {"Problema observado": "Solido cambia mucho entre replicas", "Causa probable": "Empaque, rugosidad o granulometria distinta", "Que hacer": "Estandarizar preparacion y posicion de muestra"},
+            ])
+            st.dataframe(trouble_rows, use_container_width=True, hide_index=True)
 
             st.markdown("### Interpretacion rapida")
             st.write(
