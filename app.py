@@ -2732,7 +2732,7 @@ if st.session_state["active_page"] == "Aprender":
             em_demo = _gaussian(wl_demo, 560, 48, 1.0)
             exc_demo = _gaussian(wl_demo, 390, 32, 0.65) + _gaussian(wl_demo, 470, 50, 0.45)
 
-            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10, 3.5), sharey=True)
+            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10, 3.8), sharey=True)
             demo_panels = [
                 {
                     "title": "Absorcion",
@@ -2773,8 +2773,17 @@ if st.session_state["active_page"] == "Aprender":
                     fontsize=8,
                     color="#111827",
                 )
-                ax_demo.set_title(panel["title"], fontsize=11, fontweight="bold")
-                ax_demo.text(0.5, 1.02, panel["subtitle"], transform=ax_demo.transAxes, ha="center", fontsize=8)
+                ax_demo.set_title(panel["title"], fontsize=12, fontweight="bold", pad=10)
+                ax_demo.text(
+                    0.04,
+                    0.95,
+                    panel["subtitle"],
+                    transform=ax_demo.transAxes,
+                    ha="left",
+                    va="top",
+                    fontsize=7.5,
+                    bbox=dict(facecolor="white", alpha=0.86, edgecolor="none", pad=2),
+                )
                 ax_demo.set_xlabel("Longitud de onda (nm)")
                 ax_demo.grid(alpha=0.25)
                 ax_demo.set_xlim(300, 750)
@@ -2921,7 +2930,7 @@ if st.session_state["active_page"] == "Aprender":
                     "Principio de una esfera integradora para medir reflectancia y transmitancia. "
                     "Fuente: Wikimedia Commons."
                 ),
-                use_container_width=True,
+                width=620,
             )
             st.caption(
                 "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
@@ -3131,7 +3140,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["cuvettes"],
                     caption="Cubetas para espectrofotometria. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=280,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Spectrophotometer_cuvettes.JPG)"
@@ -3146,7 +3155,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["cuvette_in_spectrophotometer"],
                     caption="Cubeta colocada en un espectrofotometro. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=320,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:A_cuvette_in_a_spectrophotometer.jpg)"
@@ -3163,7 +3172,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["cuvette_holder"],
                     caption="Soporte de cubeta con control de temperatura. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=280,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Cuvette_holder.jpg)"
@@ -3177,7 +3186,7 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["integrating_sphere"],
                     caption="Esfera integradora para reflectancia/transmitancia. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=340,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
