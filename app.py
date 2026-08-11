@@ -2723,11 +2723,16 @@ if st.session_state["active_page"] == "Aprender":
             em_demo = _gaussian(wl_demo, 560, 48, 1.0)
             exc_demo = _gaussian(wl_demo, 390, 32, 0.65) + _gaussian(wl_demo, 470, 50, 0.45)
 
-            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10.5, 3.9), sharey=True)
             demo_panels = [
                 {
                     "title": "Absorcion",
                     "subtitle": "Se mide cuanta luz pierde el haz",
+                    "body": (
+                        "La absorcion indica que longitudes de onda toma la muestra desde la luz incidente. "
+                        "Sirve para identificar bandas electronicas, estimar concentraciones y escoger una "
+                        "longitud de excitacion razonable."
+                    ),
+                    "latex": r"A = \log_{10}\left(\frac{I_0}{I}\right)",
                     "curve": abs_demo,
                     "color": "#1f77b4",
                     "marker": 405,
@@ -2736,6 +2741,12 @@ if st.session_state["active_page"] == "Aprender":
                 {
                     "title": "Excitacion",
                     "subtitle": "Se barre lambda exc y se observa lambda em fija",
+                    "body": (
+                        "La excitacion mide que longitudes de onda producen emision mientras se observa una "
+                        "longitud de emision fija. Si se parece a la absorcion, normalmente absorbe y emite "
+                        "la misma especie."
+                    ),
+                    "latex": r"I_{em}(\lambda_{det})\ \mathrm{mientras}\ \lambda_{exc}\ \mathrm{varia}",
                     "curve": exc_demo,
                     "color": "#2ca02c",
                     "marker": 560,
@@ -2744,70 +2755,70 @@ if st.session_state["active_page"] == "Aprender":
                 {
                     "title": "Emision",
                     "subtitle": "Se fija lambda exc y se mide la luz emitida",
+                    "body": (
+                        "La emision muestra la distribucion de luz que sale de la muestra despues de excitarla. "
+                        "Su maximo suele aparecer a mayor longitud de onda por relajacion del estado excitado."
+                    ),
+                    "latex": r"I_{em}(\lambda_{em})\ \mathrm{con}\ \lambda_{exc}\ \mathrm{fija}",
                     "curve": em_demo,
                     "color": "#d62728",
                     "marker": 405,
                     "marker_label": "lambda exc fija",
                 },
             ]
-            for ax_demo, panel in zip(axes_demo, demo_panels):
-                ax_demo.plot(wl_demo, panel["curve"], color=panel["color"], linewidth=2.2)
-                ax_demo.fill_between(wl_demo, 0, panel["curve"], color=panel["color"], alpha=0.12)
-                ax_demo.axvline(panel["marker"], color="#111827", linestyle="--", linewidth=1.1)
-                ax_demo.text(
-                    panel["marker"],
-                    0.94,
-                    panel["marker_label"],
-                    rotation=90,
-                    va="top",
-                    ha="right",
-                    fontsize=8,
-                    color="#111827",
-                )
-                ax_demo.set_title(panel["title"], fontsize=12, fontweight="bold", pad=10)
-                ax_demo.text(
-                    0.04,
-                    0.95,
-                    panel["subtitle"],
-                    transform=ax_demo.transAxes,
-                    ha="left",
-                    va="top",
-                    fontsize=7.5,
-                    bbox=dict(facecolor="white", alpha=0.86, edgecolor="none", pad=2),
-                )
-                ax_demo.set_xlabel("Longitud de onda (nm)")
-                ax_demo.grid(alpha=0.25)
-                ax_demo.set_xlim(300, 750)
-                ax_demo.set_ylim(0, 1.08)
-            axes_demo[0].set_ylabel("Senal normalizada")
-            fig_demo.tight_layout()
-
-            fund_graph_col, fund_text_col = st.columns([1.25, 1])
-            with fund_graph_col:
-                show_and_close(fig_demo)
-                st.caption(
-                    "Separar los paneles evita comparar intensidades como si fueran la misma medicion."
-                )
-            with fund_text_col:
+            intro_left, intro_right = st.columns([1, 1])
+            with intro_left:
                 st.write(
                     "La longitud de onda se coloca normalmente en el eje X y la respuesta en el eje Y. "
                     "La forma de la banda contiene informacion sobre niveles electronicos, entorno quimico, "
                     "vibraciones, agregacion, defectos, dispersidad y rigidez del medio."
                 )
                 st.write(
-                    "Una banda espectral casi nunca es una linea infinitamente delgada. Suele ser ancha porque "
-                    "muchas transiciones vibracionales, conformaciones y microambientes contribuyen al mismo "
-                    "proceso electronico. Por eso, ademas del maximo, importan la anchura, la asimetria, los "
-                    "hombros y la cola de la banda."
+                    "Una banda espectral casi nunca es una linea infinitamente delgada. Por eso, ademas del maximo, "
+                    "importan la anchura, la asimetria, los hombros y la cola de la banda."
                 )
+            with intro_right:
                 st.latex(r"E = \frac{hc}{\lambda}")
                 st.latex(r"E(\mathrm{eV}) \approx \frac{1240}{\lambda(\mathrm{nm})}")
                 st.write(
-                    "Longitudes de onda pequenas corresponden a fotones de mayor energia. Por eso un cambio "
-                    "de 400 a 500 nm no representa el mismo cambio energetico que uno de 700 a 800 nm. "
-                    "Cuando quieres comparar desplazamientos entre muestras, convertir nm a eV o cm-1 ayuda "
-                    "a interpretar cambios energeticos reales."
+                    "Longitudes de onda pequenas corresponden a fotones de mayor energia. Convertir nm a eV o cm-1 "
+                    "ayuda a interpretar desplazamientos energeticos reales."
                 )
+
+            for panel in demo_panels:
+                _, graph_col, text_col, _ = st.columns([0.08, 1, 1, 0.08])
+                with graph_col:
+                    fig_panel, ax_panel = plt.subplots(figsize=(4.2, 2.7))
+                    ax_panel.plot(wl_demo, panel["curve"], color=panel["color"], linewidth=2.2)
+                    ax_panel.fill_between(wl_demo, 0, panel["curve"], color=panel["color"], alpha=0.12)
+                    ax_panel.axvline(panel["marker"], color="#111827", linestyle="--", linewidth=1.1)
+                    ax_panel.text(
+                        panel["marker"],
+                        0.92,
+                        panel["marker_label"],
+                        rotation=90,
+                        va="top",
+                        ha="right",
+                        fontsize=8,
+                        color="#111827",
+                    )
+                    ax_panel.set_title(panel["title"], fontsize=12, fontweight="bold", pad=8)
+                    ax_panel.set_xlabel("Longitud de onda (nm)")
+                    ax_panel.set_ylabel("Senal normalizada")
+                    ax_panel.grid(alpha=0.25)
+                    ax_panel.set_xlim(300, 750)
+                    ax_panel.set_ylim(0, 1.08)
+                    fig_panel.tight_layout()
+                    show_and_close(fig_panel)
+                with text_col:
+                    st.markdown(f"#### {panel['title']}")
+                    st.caption(panel["subtitle"])
+                    st.write(panel["body"])
+                    st.latex(panel["latex"])
+            st.caption(
+                "Separar los espectros evita comparar intensidades como si fueran la misma medicion. "
+                "Las curvas estan relacionadas, pero cada una responde una pregunta experimental diferente."
+            )
 
             fc_text, fc_fig = st.columns([1.2, 1])
             with fc_text:
@@ -2914,7 +2925,7 @@ if st.session_state["active_page"] == "Aprender":
                 "regresa desde la superficie, que puede incluir contribuciones especulares y difusas."
             )
 
-            uv_text, uv_img = st.columns([1, 1.15])
+            _, uv_text, uv_img, _ = st.columns([0.08, 1, 1, 0.08])
             with uv_text:
                 st.markdown("#### UV-Vis de absorcion")
                 st.write(
@@ -2927,13 +2938,13 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["uvvis"],
                     caption="Esquema de un espectrofotometro UV-Vis. Fuente: Wikimedia Commons.",
-                    width=430,
+                    width=390,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Schematic_of_UV-_visible_spectrophotometer-en.svg)"
                 )
 
-            fl_text, fl_img = st.columns([1, 1.15])
+            _, fl_text, fl_img, _ = st.columns([0.08, 1, 1, 0.08])
             with fl_text:
                 st.markdown("#### Fluorimetro")
                 st.write(
@@ -2946,13 +2957,13 @@ if st.session_state["active_page"] == "Aprender":
                 st.image(
                     viewer_image_sources["fluorimeter"],
                     caption="Disposicion optica de un espectrofotometro de fluorescencia. Fuente: Wikimedia Commons.",
-                    width=430,
+                    width=390,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Fluorescence_spectrophotometer_layout.png)"
                 )
 
-            ref_text, ref_img = st.columns([1, 1.15])
+            _, ref_text, ref_img, _ = st.columns([0.08, 1, 1, 0.08])
             with ref_text:
                 st.markdown("#### Reflectancia difusa en solidos")
                 st.write(
@@ -2968,7 +2979,7 @@ if st.session_state["active_page"] == "Aprender":
                         "Principio de una esfera integradora para medir reflectancia y transmitancia. "
                         "Fuente: Wikimedia Commons."
                     ),
-                    width=430,
+                    width=390,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
