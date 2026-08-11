@@ -2688,12 +2688,15 @@ if st.session_state["active_page"] == "Aprender":
             "franck_condon": "https://commons.wikimedia.org/wiki/Special:FilePath/Franck-Condon-diagram.png",
             "uvvis": "https://commons.wikimedia.org/wiki/Special:FilePath/Schematic%20of%20UV-%20visible%20spectrophotometer-en.svg",
             "fluorimeter": "https://commons.wikimedia.org/wiki/Special:FilePath/Fluorescence%20spectrophotometer%20layout.png",
+            "integrating_sphere": "https://commons.wikimedia.org/wiki/Special:FilePath/Integrating%20sphere%20principle.svg",
+            "cuvettes": "https://commons.wikimedia.org/wiki/Special:FilePath/Spectrophotometer%20cuvettes.JPG",
+            "cuvette_in_spectrophotometer": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20cuvette%20in%20a%20spectrophotometer.jpg",
+            "cuvette_holder": "https://commons.wikimedia.org/wiki/Special:FilePath/Cuvette%20holder.jpg",
         }
 
         tabs_viewer_learn = st.tabs([
             "Fundamentos",
             "Equipos",
-            "Tipos",
             "Metricas",
             "Procesamiento",
             "Buenas practicas",
@@ -2729,15 +2732,60 @@ if st.session_state["active_page"] == "Aprender":
             em_demo = _gaussian(wl_demo, 560, 48, 1.0)
             exc_demo = _gaussian(wl_demo, 390, 32, 0.65) + _gaussian(wl_demo, 470, 50, 0.45)
 
-            fig_demo, ax_demo = plt.subplots(figsize=(8, 4))
-            ax_demo.plot(wl_demo, abs_demo, label="Absorcion", color="#1f77b4", linewidth=2)
-            ax_demo.plot(wl_demo, exc_demo, label="Excitacion", color="#2ca02c", linewidth=2)
-            ax_demo.plot(wl_demo, em_demo, label="Emision", color="#d62728", linewidth=2)
-            ax_demo.set_xlabel("Longitud de onda (nm)")
-            ax_demo.set_ylabel("Senal normalizada")
-            ax_demo.grid(alpha=0.25)
-            ax_demo.legend(loc="best")
+            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10, 3.5), sharey=True)
+            demo_panels = [
+                {
+                    "title": "Absorcion",
+                    "subtitle": "Se mide cuanta luz pierde el haz",
+                    "curve": abs_demo,
+                    "color": "#1f77b4",
+                    "marker": 405,
+                    "marker_label": "lambda absorbida",
+                },
+                {
+                    "title": "Excitacion",
+                    "subtitle": "Se barre lambda exc y se observa lambda em fija",
+                    "curve": exc_demo,
+                    "color": "#2ca02c",
+                    "marker": 560,
+                    "marker_label": "lambda em observada",
+                },
+                {
+                    "title": "Emision",
+                    "subtitle": "Se fija lambda exc y se mide la luz emitida",
+                    "curve": em_demo,
+                    "color": "#d62728",
+                    "marker": 405,
+                    "marker_label": "lambda exc fija",
+                },
+            ]
+            for ax_demo, panel in zip(axes_demo, demo_panels):
+                ax_demo.plot(wl_demo, panel["curve"], color=panel["color"], linewidth=2.2)
+                ax_demo.fill_between(wl_demo, 0, panel["curve"], color=panel["color"], alpha=0.12)
+                ax_demo.axvline(panel["marker"], color="#111827", linestyle="--", linewidth=1.1)
+                ax_demo.text(
+                    panel["marker"],
+                    0.94,
+                    panel["marker_label"],
+                    rotation=90,
+                    va="top",
+                    ha="right",
+                    fontsize=8,
+                    color="#111827",
+                )
+                ax_demo.set_title(panel["title"], fontsize=11, fontweight="bold")
+                ax_demo.text(0.5, 1.02, panel["subtitle"], transform=ax_demo.transAxes, ha="center", fontsize=8)
+                ax_demo.set_xlabel("Longitud de onda (nm)")
+                ax_demo.grid(alpha=0.25)
+                ax_demo.set_xlim(300, 750)
+                ax_demo.set_ylim(0, 1.08)
+            axes_demo[0].set_ylabel("Senal normalizada")
+            fig_demo.tight_layout()
             show_and_close(fig_demo)
+            st.caption(
+                "Separar los paneles evita comparar intensidades como si fueran la misma medicion. "
+                "Las curvas estan relacionadas, pero cada una responde una pregunta experimental diferente."
+            )
 
             fc_text, fc_fig = st.columns([1.2, 1])
             with fc_text:
@@ -2777,6 +2825,59 @@ if st.session_state["active_page"] == "Aprender":
                 "reabsorcion o una longitud de deteccion mal escogida."
             )
 
+            st.markdown("### Absorcion")
+            st.write(
+                "La absorbancia se define a partir de la transmitancia. Si I0 es la intensidad incidente "
+                "e I es la intensidad transmitida, la muestra absorbe una fraccion de la luz que entra."
+            )
+            st.latex(r"T = \frac{I}{I_0}")
+            st.latex(r"A = -\log_{10}(T) = \log_{10}\left(\frac{I_0}{I}\right)")
+            st.write("En soluciones diluidas suele aplicarse la ley de Beer-Lambert:")
+            st.latex(r"A = \varepsilon b c")
+            st.write(
+                "En esta expresion, epsilon es la absortividad molar, b es la longitud de paso optico "
+                "y c la concentracion. La relacion es lineal cuando la muestra esta suficientemente diluida, "
+                "la luz es razonablemente monocromatica y no hay dispersion, agregacion o reacciones fotoquimicas."
+            )
+
+            st.markdown("### Emision")
+            st.write(
+                "En emision se fija una longitud de onda de excitacion y se barre la longitud de onda emitida. "
+                "El maximo de emision se asocia con el estado excitado relajado antes de emitir."
+            )
+            st.latex(r"I_{em}(\lambda_{em}) \quad \mathrm{con}\quad \lambda_{exc}\ \mathrm{fija}")
+            st.write(
+                "La intensidad de emision no depende solo de cuanto emite el compuesto. Tambien depende de "
+                "cuanta luz absorbe, de la concentracion, oxigeno, solvente, temperatura, rendijas, ganancia "
+                "del detector y correccion instrumental."
+            )
+
+            st.markdown("### Excitacion")
+            st.write(
+                "En excitacion se fija una longitud de onda de emision y se barre la longitud de onda de excitacion. "
+                "Si no hay procesos raros, el espectro de excitacion suele parecerse al de absorcion del cromoforo emisor."
+            )
+            st.latex(r"I_{em}(\lambda_{det}) \quad \mathrm{mientras}\quad \lambda_{exc}\ \mathrm{varia}")
+            st.write(
+                "Este espectro ayuda a identificar que especies alimentan la emision. Una banda intensa en "
+                "absorcion que no aparece en excitacion puede pertenecer a una especie no emisora o a una "
+                "ruta que no transfiere energia eficientemente hacia el estado emisor observado."
+            )
+
+            st.markdown("### Reflectancia difusa")
+            st.write(
+                "En solidos se mide reflectancia R. Si la transmitancia es despreciable, se puede usar una "
+                "absorcion aparente como 1 - R, o transformar R mediante Kubelka-Munk cuando se quiere una "
+                "magnitud relacionada con absorcion y dispersion."
+            )
+            st.latex(r"A_{aparente} \approx 1 - R")
+            st.latex(r"F(R) = \frac{(1-R)^2}{2R}")
+            st.write(
+                "Para solidos, R debe reportarse con cuidado: reflectancia difusa, especular o total no son "
+                "equivalentes. La compactacion del polvo, tamano de particula, rugosidad, espesor de pelicula "
+                "y soporte pueden cambiar el espectro sin que cambie la molecula."
+            )
+
         with tabs_viewer_learn[1]:
             st.markdown("### Esquemas de equipos")
             st.write(
@@ -2814,11 +2915,17 @@ if st.session_state["active_page"] == "Aprender":
                 )
 
             st.markdown("#### Reflectancia difusa en solidos")
-            st.caption(
-                "Para reflectancia difusa mantengo un esquema propio simplificado porque no encontre una imagen abierta "
-                "suficientemente clara y equivalente para este contexto."
+            st.image(
+                viewer_image_sources["integrating_sphere"],
+                caption=(
+                    "Principio de una esfera integradora para medir reflectancia y transmitancia. "
+                    "Fuente: Wikimedia Commons."
+                ),
+                use_container_width=True,
             )
-            show_and_close(_draw_reflectance_diagram())
+            st.caption(
+                "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
+            )
 
             st.markdown("### Que cambia experimentalmente")
             st.write(
@@ -2845,7 +2952,7 @@ if st.session_state["active_page"] == "Aprender":
                 "Cambiar el portamuestras puede cambiar la senal aunque el material sea el mismo."
             )
 
-        with tabs_viewer_learn[2]:
+        if False:
             st.markdown("### Absorcion")
             st.write(
                 "La absorbancia se define a partir de la transmitancia. Si I0 es la intensidad incidente "
@@ -2899,7 +3006,7 @@ if st.session_state["active_page"] == "Aprender":
                 "y soporte pueden cambiar el espectro sin que cambie la molecula."
             )
 
-        with tabs_viewer_learn[3]:
+        with tabs_viewer_learn[2]:
             st.markdown("### Metricas que calcula o puede calcular el visor")
             st.write(
                 "Las metricas resumen una curva completa en pocos numeros. Sirven para comparar muestras, "
@@ -2956,7 +3063,7 @@ if st.session_state["active_page"] == "Aprender":
                 "shift muy pequeno puede aumentar la reabsorcion porque absorcion y emision se solapan."
             )
 
-        with tabs_viewer_learn[4]:
+        with tabs_viewer_learn[3]:
             st.markdown("### Normalizacion")
             st.write(
                 "Normalizar cambia la escala vertical para facilitar comparaciones. No cambia la posicion "
@@ -3010,7 +3117,7 @@ if st.session_state["active_page"] == "Aprender":
                 "si el espectro fue suavizado y con que parametros."
             )
 
-        with tabs_viewer_learn[5]:
+        with tabs_viewer_learn[4]:
             st.markdown("### Buenas practicas para cargar y comparar espectros")
             st.write(
                 "Un buen visor no arregla datos mal adquiridos, pero ayuda a encontrarlos. Antes de comparar "
@@ -3018,6 +3125,69 @@ if st.session_state["active_page"] == "Aprender":
                 "de barrido, correccion instrumental, concentracion y geometria."
             )
 
+            bp1, bp2 = st.columns(2)
+            with bp1:
+                st.markdown("#### Cubetas y blanco")
+                st.image(
+                    viewer_image_sources["cuvettes"],
+                    caption="Cubetas para espectrofotometria. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Spectrophotometer_cuvettes.JPG)"
+                )
+                st.write(
+                    "Usa cubetas compatibles con el rango espectral: cuarzo para UV y plastico/vidrio para visible "
+                    "cuando el material lo permita. Limpia las caras opticas, evita huellas y burbujas, y mide un "
+                    "blanco con el mismo solvente, matriz o soporte que usa la muestra."
+                )
+            with bp2:
+                st.markdown("#### Orientacion y camino optico")
+                st.image(
+                    viewer_image_sources["cuvette_in_spectrophotometer"],
+                    caption="Cubeta colocada en un espectrofotometro. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:A_cuvette_in_a_spectrophotometer.jpg)"
+                )
+                st.write(
+                    "Coloca siempre la misma cara de la cubeta hacia el haz y manten constante el camino optico. "
+                    "En fluorescencia, pequenas diferencias de posicion pueden cambiar la cantidad de luz excitada "
+                    "y emitida que llega al detector."
+                )
+
+            bp3, bp4 = st.columns(2)
+            with bp3:
+                st.markdown("#### Portamuestras y temperatura")
+                st.image(
+                    viewer_image_sources["cuvette_holder"],
+                    caption="Soporte de cubeta con control de temperatura. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Cuvette_holder.jpg)"
+                )
+                st.write(
+                    "Registra temperatura, tipo de portamuestras, ancho de rendijas, velocidad de barrido e intervalo "
+                    "de integracion. Estos parametros pueden cambiar el ancho, la intensidad y la relacion senal/ruido."
+                )
+            with bp4:
+                st.markdown("#### Solidos y reflectancia")
+                st.image(
+                    viewer_image_sources["integrating_sphere"],
+                    caption="Esfera integradora para reflectancia/transmitancia. Fuente: Wikimedia Commons.",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
+                )
+                st.write(
+                    "En polvos, peliculas y solidos, la rugosidad, compactacion, granulometria, espesor y soporte "
+                    "modifican la luz dispersada. Para comparar muestras, prepara todas con el mismo protocolo."
+                )
+
+            st.markdown("### Lista de revision")
             qc_rows = pd.DataFrame([
                 {"Revision": "Columnas", "Que mirar": "Longitud de onda e intensidad bien seleccionadas", "Riesgo": "Picos falsos o eje invertido"},
                 {"Revision": "Rango", "Que mirar": "Mismo intervalo espectral entre muestras", "Riesgo": "Areas no comparables"},
