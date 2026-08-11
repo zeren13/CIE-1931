@@ -2185,6 +2185,20 @@ PAGE_ICONS = {
     "Aprender": "\U0001F4DA",
 }
 
+st.markdown(
+    """
+    <style>
+    div[data-testid="stMarkdownContainer"] > p {
+        text-align: justify;
+    }
+    figcaption, div[data-testid="stCaptionContainer"] p {
+        text-align: left;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 if st.session_state["active_page"] != "Inicio":
     st.sidebar.markdown(
         """
@@ -2704,35 +2718,12 @@ if st.session_state["active_page"] == "Aprender":
 
         with tabs_viewer_learn[0]:
             st.markdown("### Que representa un espectro")
-            st.write(
-                "La longitud de onda se coloca normalmente en el eje X y la respuesta en el eje Y. "
-                "La forma de la banda contiene informacion sobre niveles electronicos, entorno quimico, "
-                "vibraciones, agregacion, defectos, dispersidad y rigidez del medio."
-            )
-            st.write(
-                "Una banda espectral casi nunca es una linea infinitamente delgada. Suele ser ancha porque "
-                "muchas transiciones vibracionales, conformaciones y microambientes contribuyen al mismo "
-                "proceso electronico. Por eso, ademas del maximo, importan la anchura, la asimetria, los "
-                "hombros y la cola de la banda."
-            )
-            st.latex(r"E = \frac{hc}{\lambda}")
-            st.latex(r"E(\mathrm{eV}) \approx \frac{1240}{\lambda(\mathrm{nm})}")
-            st.write(
-                "Longitudes de onda pequenas corresponden a fotones de mayor energia. Por eso un cambio "
-                "de 400 a 500 nm no representa el mismo cambio energetico que uno de 700 a 800 nm."
-            )
-            st.write(
-                "Cuando quieres comparar desplazamientos entre muestras, convertir nm a eV o cm-1 ayuda a "
-                "interpretar cambios energeticos reales. El eje en nm es practico para instrumentacion, "
-                "pero no es lineal en energia."
-            )
-
             wl_demo = np.linspace(300, 750, 600)
             abs_demo = _gaussian(wl_demo, 380, 35, 0.75) + _gaussian(wl_demo, 455, 60, 0.35)
             em_demo = _gaussian(wl_demo, 560, 48, 1.0)
             exc_demo = _gaussian(wl_demo, 390, 32, 0.65) + _gaussian(wl_demo, 470, 50, 0.45)
 
-            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10, 3.8), sharey=True)
+            fig_demo, axes_demo = plt.subplots(1, 3, figsize=(10.5, 3.9), sharey=True)
             demo_panels = [
                 {
                     "title": "Absorcion",
@@ -2790,11 +2781,33 @@ if st.session_state["active_page"] == "Aprender":
                 ax_demo.set_ylim(0, 1.08)
             axes_demo[0].set_ylabel("Senal normalizada")
             fig_demo.tight_layout()
-            show_and_close(fig_demo)
-            st.caption(
-                "Separar los paneles evita comparar intensidades como si fueran la misma medicion. "
-                "Las curvas estan relacionadas, pero cada una responde una pregunta experimental diferente."
-            )
+
+            fund_graph_col, fund_text_col = st.columns([1.25, 1])
+            with fund_graph_col:
+                show_and_close(fig_demo)
+                st.caption(
+                    "Separar los paneles evita comparar intensidades como si fueran la misma medicion."
+                )
+            with fund_text_col:
+                st.write(
+                    "La longitud de onda se coloca normalmente en el eje X y la respuesta en el eje Y. "
+                    "La forma de la banda contiene informacion sobre niveles electronicos, entorno quimico, "
+                    "vibraciones, agregacion, defectos, dispersidad y rigidez del medio."
+                )
+                st.write(
+                    "Una banda espectral casi nunca es una linea infinitamente delgada. Suele ser ancha porque "
+                    "muchas transiciones vibracionales, conformaciones y microambientes contribuyen al mismo "
+                    "proceso electronico. Por eso, ademas del maximo, importan la anchura, la asimetria, los "
+                    "hombros y la cola de la banda."
+                )
+                st.latex(r"E = \frac{hc}{\lambda}")
+                st.latex(r"E(\mathrm{eV}) \approx \frac{1240}{\lambda(\mathrm{nm})}")
+                st.write(
+                    "Longitudes de onda pequenas corresponden a fotones de mayor energia. Por eso un cambio "
+                    "de 400 a 500 nm no representa el mismo cambio energetico que uno de 700 a 800 nm. "
+                    "Cuando quieres comparar desplazamientos entre muestras, convertir nm a eV o cm-1 ayuda "
+                    "a interpretar cambios energeticos reales."
+                )
 
             fc_text, fc_fig = st.columns([1.2, 1])
             with fc_text:
@@ -2901,40 +2914,65 @@ if st.session_state["active_page"] == "Aprender":
                 "regresa desde la superficie, que puede incluir contribuciones especulares y difusas."
             )
 
-            eq1, eq2 = st.columns(2)
-            with eq1:
+            uv_text, uv_img = st.columns([1, 1.15])
+            with uv_text:
                 st.markdown("#### UV-Vis de absorcion")
+                st.write(
+                    "En UV-Vis se compara la intensidad incidente I0 con la intensidad transmitida I. "
+                    "El monocromador selecciona la longitud de onda, la muestra absorbe parte del haz y "
+                    "el detector registra cuanta luz queda despues de atravesarla."
+                )
+                st.latex(r"A = \log_{10}\left(\frac{I_0}{I}\right)")
+            with uv_img:
                 st.image(
                     viewer_image_sources["uvvis"],
                     caption="Esquema de un espectrofotometro UV-Vis. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=430,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Schematic_of_UV-_visible_spectrophotometer-en.svg)"
                 )
-            with eq2:
+
+            fl_text, fl_img = st.columns([1, 1.15])
+            with fl_text:
                 st.markdown("#### Fluorimetro")
+                st.write(
+                    "En fluorescencia se separan dos caminos opticos: uno para excitar la muestra y otro "
+                    "para recoger la luz emitida. La deteccion a 90 grados reduce la llegada directa de luz "
+                    "excitante al detector."
+                )
+                st.latex(r"I_{em}(\lambda_{em})\ \mathrm{con}\ \lambda_{exc}\ \mathrm{fija}")
+            with fl_img:
                 st.image(
                     viewer_image_sources["fluorimeter"],
                     caption="Disposicion optica de un espectrofotometro de fluorescencia. Fuente: Wikimedia Commons.",
-                    use_container_width=True,
+                    width=430,
                 )
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Fluorescence_spectrophotometer_layout.png)"
                 )
 
-            st.markdown("#### Reflectancia difusa en solidos")
-            st.image(
-                viewer_image_sources["integrating_sphere"],
-                caption=(
-                    "Principio de una esfera integradora para medir reflectancia y transmitancia. "
-                    "Fuente: Wikimedia Commons."
-                ),
-                width=620,
-            )
-            st.caption(
-                "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
-            )
+            ref_text, ref_img = st.columns([1, 1.15])
+            with ref_text:
+                st.markdown("#### Reflectancia difusa en solidos")
+                st.write(
+                    "En solidos se recoge la luz reflejada y dispersada por la superficie, polvo o pelicula. "
+                    "La esfera integradora ayuda a capturar luz que sale en muchas direcciones, por eso es util "
+                    "cuando la muestra no transmite como una solucion transparente."
+                )
+                st.latex(r"A_{aparente} \approx 1 - R")
+            with ref_img:
+                st.image(
+                    viewer_image_sources["integrating_sphere"],
+                    caption=(
+                        "Principio de una esfera integradora para medir reflectancia y transmitancia. "
+                        "Fuente: Wikimedia Commons."
+                    ),
+                    width=430,
+                )
+                st.caption(
+                    "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Integrating_sphere_principle.svg)"
+                )
 
             st.markdown("### Que cambia experimentalmente")
             st.write(
