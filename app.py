@@ -2752,9 +2752,10 @@ if st.session_state["active_page"] == "Aprender":
                     "body": (
                         "La absorcion indica que longitudes de onda toma la muestra desde la luz incidente. "
                         "Sirve para identificar bandas electronicas, estimar concentraciones y escoger una "
-                        "longitud de excitacion razonable."
+                        "longitud de excitacion razonable. En soluciones diluidas puede relacionarse con "
+                        "concentracion mediante Beer-Lambert."
                     ),
-                    "latex": r"A = \log_{10}\left(\frac{I_0}{I}\right)",
+                    "latex": r"A = \log_{10}\left(\frac{I_0}{I}\right)\quad;\quad A = \varepsilon b c",
                     "curve": abs_demo,
                     "color": "#1f77b4",
                     "marker": 405,
@@ -2779,7 +2780,9 @@ if st.session_state["active_page"] == "Aprender":
                     "subtitle": "Se fija lambda exc y se mide la luz emitida",
                     "body": (
                         "La emision muestra la distribucion de luz que sale de la muestra despues de excitarla. "
-                        "Su maximo suele aparecer a mayor longitud de onda por relajacion del estado excitado."
+                        "Su maximo suele aparecer a mayor longitud de onda por relajacion del estado excitado. "
+                        "La intensidad depende tambien de concentracion, oxigeno, solvente, temperatura, "
+                        "rendijas, ganancia y correccion instrumental."
                     ),
                     "latex": r"I_{em}(\lambda_{em})\ \mathrm{con}\ \lambda_{exc}\ \mathrm{fija}",
                     "curve": em_demo,
@@ -2867,57 +2870,6 @@ if st.session_state["active_page"] == "Aprender":
                 st.caption(
                     "[Ver archivo y licencia](https://commons.wikimedia.org/wiki/File:Franck-Condon-diagram.png)"
                 )
-
-            st.markdown("### Absorcion, excitacion y emision no son lo mismo")
-            st.write(
-                "La absorcion indica que longitudes de onda toma la muestra desde la luz incidente. "
-                "La excitacion mide que longitudes de onda producen emision cuando se observa una longitud "
-                "de emision fija. La emision mide que luz sale de la muestra cuando se excita a una longitud fija."
-            )
-            st.write(
-                "Si excitacion y absorcion se parecen, normalmente la especie que absorbe tambien es la que "
-                "emite. Si no se parecen, puede haber transferencia de energia, impurezas emisoras, agregacion, "
-                "reabsorcion o una longitud de deteccion mal escogida."
-            )
-
-            st.markdown("### Absorcion")
-            st.write(
-                "La absorbancia se define a partir de la transmitancia. Si I0 es la intensidad incidente "
-                "e I es la intensidad transmitida, la muestra absorbe una fraccion de la luz que entra."
-            )
-            st.latex(r"T = \frac{I}{I_0}")
-            st.latex(r"A = -\log_{10}(T) = \log_{10}\left(\frac{I_0}{I}\right)")
-            st.write("En soluciones diluidas suele aplicarse la ley de Beer-Lambert:")
-            st.latex(r"A = \varepsilon b c")
-            st.write(
-                "En esta expresion, epsilon es la absortividad molar, b es la longitud de paso optico "
-                "y c la concentracion. La relacion es lineal cuando la muestra esta suficientemente diluida, "
-                "la luz es razonablemente monocromatica y no hay dispersion, agregacion o reacciones fotoquimicas."
-            )
-
-            st.markdown("### Emision")
-            st.write(
-                "En emision se fija una longitud de onda de excitacion y se barre la longitud de onda emitida. "
-                "El maximo de emision se asocia con el estado excitado relajado antes de emitir."
-            )
-            st.latex(r"I_{em}(\lambda_{em}) \quad \mathrm{con}\quad \lambda_{exc}\ \mathrm{fija}")
-            st.write(
-                "La intensidad de emision no depende solo de cuanto emite el compuesto. Tambien depende de "
-                "cuanta luz absorbe, de la concentracion, oxigeno, solvente, temperatura, rendijas, ganancia "
-                "del detector y correccion instrumental."
-            )
-
-            st.markdown("### Excitacion")
-            st.write(
-                "En excitacion se fija una longitud de onda de emision y se barre la longitud de onda de excitacion. "
-                "Si no hay procesos raros, el espectro de excitacion suele parecerse al de absorcion del cromoforo emisor."
-            )
-            st.latex(r"I_{em}(\lambda_{det}) \quad \mathrm{mientras}\quad \lambda_{exc}\ \mathrm{varia}")
-            st.write(
-                "Este espectro ayuda a identificar que especies alimentan la emision. Una banda intensa en "
-                "absorcion que no aparece en excitacion puede pertenecer a una especie no emisora o a una "
-                "ruta que no transfiere energia eficientemente hacia el estado emisor observado."
-            )
 
             st.markdown("### Reflectancia difusa")
             st.write(
@@ -3030,60 +2982,6 @@ if st.session_state["active_page"] == "Aprender":
             st.write(
                 "**Portamuestras:** cubeta, celda de solido, soporte de pelicula o accesorio de reflectancia. "
                 "Cambiar el portamuestras puede cambiar la senal aunque el material sea el mismo."
-            )
-
-        if False:
-            st.markdown("### Absorcion")
-            st.write(
-                "La absorbancia se define a partir de la transmitancia. Si I0 es la intensidad incidente "
-                "e I es la intensidad transmitida:"
-            )
-            st.latex(r"T = \frac{I}{I_0}")
-            st.latex(r"A = -\log_{10}(T) = \log_{10}\left(\frac{I_0}{I}\right)")
-            st.write("En soluciones diluidas suele aplicarse la ley de Beer-Lambert:")
-            st.latex(r"A = \varepsilon b c")
-            st.write(
-                "En esta expresion, epsilon es la absortividad molar, b es la longitud de paso optico "
-                "y c la concentracion. La relacion es lineal cuando la muestra esta suficientemente diluida, "
-                "la luz es razonablemente monocromatica y no hay dispersion, agregacion o reacciones fotoquimicas."
-            )
-
-            st.markdown("### Emision")
-            st.write(
-                "En emision se fija una longitud de onda de excitacion y se barre la longitud de onda emitida. "
-                "El maximo de emision se asocia con el estado excitado relajado antes de emitir."
-            )
-            st.latex(r"I_{em}(\lambda_{em}) \quad \mathrm{con}\quad \lambda_{exc}\ \mathrm{fija}")
-            st.write(
-                "La intensidad de emision no depende solo de cuanto emite el compuesto. Tambien depende de "
-                "cuanta luz absorbe, de la concentracion, oxigeno, solvente, temperatura, rendijas, ganancia "
-                "del detector y correccion instrumental."
-            )
-
-            st.markdown("### Excitacion")
-            st.write(
-                "En excitacion se fija una longitud de onda de emision y se barre la longitud de onda de excitacion. "
-                "Si no hay procesos raros, el espectro de excitacion suele parecerse al de absorcion del cromoforo emisor."
-            )
-            st.latex(r"I_{em}(\lambda_{det}) \quad \mathrm{mientras}\quad \lambda_{exc}\ \mathrm{varia}")
-            st.write(
-                "Este espectro ayuda a identificar que especies alimentan la emision. Una banda intensa en "
-                "absorcion que no aparece en excitacion puede pertenecer a una especie no emisora o a una "
-                "ruta que no transfiere energia eficientemente hacia el estado emisor observado."
-            )
-
-            st.markdown("### Reflectancia difusa")
-            st.write(
-                "En solidos se mide reflectancia R. Si la transmitancia es despreciable, se puede usar una "
-                "absorcion aparente como 1 - R, o transformar R mediante Kubelka-Munk cuando se quiere una "
-                "magnitud relacionada con absorcion/dispersión."
-            )
-            st.latex(r"A_{aparente} \approx 1 - R")
-            st.latex(r"F(R) = \frac{(1-R)^2}{2R}")
-            st.write(
-                "Para solidos, R debe reportarse con cuidado: reflectancia difusa, especular o total no son "
-                "equivalentes. La compactacion del polvo, tamano de particula, rugosidad, espesor de pelicula "
-                "y soporte pueden cambiar el espectro sin que cambie la molecula."
             )
 
         with tabs_viewer_learn[2]:
