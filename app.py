@@ -25,6 +25,12 @@ st.markdown(
         --muted: #566572;
         --line: #dce3e8;
         --soft: #f4f7f8;
+        --blue: #256b8a;
+        --blue-soft: #eaf5fa;
+        --green: #257052;
+        --green-soft: #edf8f2;
+        --violet: #6453a5;
+        --violet-soft: #f1eefb;
         --accent: #9e2f2b;
         --accent-soft: #f8eceb;
         --warn: #8a5a00;
@@ -72,25 +78,28 @@ st.markdown(
         margin-bottom: .8rem;
     }
     .hero {
-        border: 1px solid var(--line);
-        border-top: 4px solid var(--accent);
-        border-radius: 12px;
-        padding: 1.8rem 2rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f7f9fa 100%);
+        border: 1px solid #d8e6ec;
+        border-radius: 18px;
+        padding: 2.25rem 2.4rem;
+        background: linear-gradient(135deg, #fff 0%, #eef8fb 58%, #f9efee 100%);
+        box-shadow: 0 10px 30px rgba(25, 61, 78, .07);
         margin-bottom: 1.4rem;
     }
     .hero h1 { font-size: clamp(2rem, 5vw, 3.3rem); margin: 0 0 .4rem 0; }
     .hero p { color: var(--muted); max-width: 780px; font-size: 1.08rem; margin: 0; }
     .doc-card {
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 14px;
         background: #fff;
-        padding: 1.05rem 1.15rem;
+        padding: 1.2rem 1.25rem;
         height: 100%;
         margin-bottom: .75rem;
+        box-shadow: 0 4px 14px rgba(31, 54, 68, .045);
     }
+    .doc-card .module-icon { font-size: 1.45rem; display: block; margin-bottom: .55rem; }
     .doc-card h3 { font-size: 1.05rem; margin: 0 0 .35rem 0; }
     .doc-card p { color: var(--muted); margin: 0; font-size: .94rem; }
+    .doc-card .learn-result { display:block; margin-top:.65rem; color:var(--blue); font-size:.84rem; font-weight:700; }
     .notice, .caution, .method {
         border-radius: 9px;
         padding: .95rem 1.1rem;
@@ -100,6 +109,70 @@ st.markdown(
     .caution { border-left: 4px solid #bc7b00; background: var(--warn-soft); }
     .method { border-left: 4px solid var(--accent); background: var(--accent-soft); }
     .notice p, .caution p, .method p { margin: 0; }
+    .plain-language {
+        border: 1px solid #badbe8;
+        border-radius: 12px;
+        background: var(--blue-soft);
+        padding: 1rem 1.15rem;
+        margin: 1rem 0 1.3rem;
+    }
+    .plain-language b { color: #185875; }
+    .plain-language p { margin: 0; }
+    .learn-goals {
+        border: 1px solid #cae5d7;
+        background: var(--green-soft);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        margin: .9rem 0 1.4rem;
+    }
+    .learn-goals h3 { color: var(--green); font-size: 1rem; margin: 0 0 .5rem; }
+    .learn-goals ul { margin: 0; padding-left: 1.2rem; }
+    .learn-goals li { margin: .2rem 0; }
+    .step-flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .65rem;
+        margin: .8rem 0 1.4rem;
+    }
+    .step-box {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 12px;
+        padding: .9rem;
+        min-height: 118px;
+    }
+    .step-number {
+        display: inline-grid;
+        place-items: center;
+        width: 1.65rem;
+        height: 1.65rem;
+        border-radius: 50%;
+        background: var(--violet);
+        color: #fff;
+        font-weight: 800;
+        font-size: .78rem;
+        margin-bottom: .5rem;
+    }
+    .step-box b { display:block; margin-bottom:.25rem; }
+    .step-box span { color:var(--muted); font-size:.86rem; line-height:1.4; }
+    .guided-example {
+        border: 1px solid #d8d1f0;
+        background: var(--violet-soft);
+        border-radius: 12px;
+        padding: 1rem 1.15rem;
+        margin: 1rem 0;
+    }
+    .guided-example h3 { color: #51418d; font-size: 1rem; margin: 0 0 .4rem; }
+    .guided-example p { margin: 0; }
+    .question-strip {
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:.7rem;
+        margin:1rem 0 1.5rem;
+    }
+    .question-strip div { border-radius:12px; padding:1rem; background:#fff; border:1px solid var(--line); }
+    .question-strip b { color:var(--accent); display:block; margin-bottom:.25rem; }
+    .question-strip span { color:var(--muted); font-size:.9rem; }
     .label {
         color: var(--muted);
         font-size: .75rem;
@@ -134,6 +207,7 @@ st.markdown(
         .main .block-container { padding: 1.2rem 1rem 3rem; }
         .hero { padding: 1.25rem; }
         .scope-table { font-size: .85rem; }
+        .step-flow, .question-strip { grid-template-columns: 1fr; }
     }
     </style>
     """,
@@ -155,20 +229,20 @@ SECTIONS = [
 ]
 
 SECTION_ICONS = {
-    "Inicio": "⌂",
-    "Visor de espectros": "⌁",
-    "Análisis de picos": "⌃",
-    "Band gap óptico": "Eg",
-    "CIE 1931": "xy",
-    "Colorimetría": "Lab",
-    "Rendimiento cuántico": "Φ",
-    "Datos y diagnósticos": "CSV",
-    "Validación y referencias": "✓",
-    "Historial de cambios": "↻",
+    "Inicio": "🧭",
+    "Visor de espectros": "📈",
+    "Análisis de picos": "⛰️",
+    "Band gap óptico": "⚡",
+    "CIE 1931": "🎨",
+    "Colorimetría": "🌈",
+    "Rendimiento cuántico": "💡",
+    "Datos y diagnósticos": "🗂️",
+    "Validación y referencias": "✅",
+    "Historial de cambios": "🕘",
 }
 
 
-def page_header(title: str, subtitle: str, kicker: str = "Guía de uso") -> None:
+def page_header(title: str, subtitle: str, kicker: str = "Aprende con SpectraLab") -> None:
     st.markdown(f'<div class="doc-kicker">{kicker}</div>', unsafe_allow_html=True)
     st.title(title)
     st.markdown(f'<p class="doc-lead">{subtitle}</p>', unsafe_allow_html=True)
@@ -186,9 +260,40 @@ def method(text: str) -> None:
     st.markdown(f'<div class="method"><p><b>Principio científico.</b> {text}</p></div>', unsafe_allow_html=True)
 
 
-def tool_card(title: str, description: str) -> None:
+def tool_card(icon: str, title: str, description: str, result: str) -> None:
     st.markdown(
-        f'<div class="doc-card"><h3>{title}</h3><p>{description}</p></div>',
+        f'<div class="doc-card"><span class="module-icon">{icon}</span><h3>{title}</h3>'
+        f'<p>{description}</p><span class="learn-result">Aprenderás: {result}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def plain_language(text: str) -> None:
+    st.markdown(
+        f'<div class="plain-language"><p><b>En palabras simples.</b> {text}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def learning_goals(*goals: str) -> None:
+    items = "".join(f"<li>{goal}</li>" for goal in goals)
+    st.markdown(
+        f'<div class="learn-goals"><h3>Al terminar esta sección podrás</h3><ul>{items}</ul></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def step_flow(*steps: tuple[str, str]) -> None:
+    cards = "".join(
+        f'<div class="step-box"><span class="step-number">{index}</span><b>{title}</b><span>{description}</span></div>'
+        for index, (title, description) in enumerate(steps, start=1)
+    )
+    st.markdown(f'<div class="step-flow">{cards}</div>', unsafe_allow_html=True)
+
+
+def guided_example(title: str, text: str) -> None:
+    st.markdown(
+        f'<div class="guided-example"><h3>Ejemplo guiado · {title}</h3><p>{text}</p></div>',
         unsafe_allow_html=True,
     )
 
@@ -215,8 +320,8 @@ if selected == "Inicio":
         <div class="hero">
           <span class="version-badge">{APP_VERSION}</span>
           <h1>{APP_NAME}</h1>
-          <p>Documentación científica y guía de interpretación para las herramientas
-          de análisis espectroscópico del programa portable.</p>
+          <p>Aprende a escoger la herramienta adecuada, preparar tus datos y
+          explicar cada resultado sin perder el rigor científico.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -224,34 +329,43 @@ if selected == "Inicio":
 
     notice(
         "Los cálculos se realizan en el programa portable para Windows o macOS. "
-        "Esta web describe qué hace cada herramienta, qué datos necesita y cuándo un resultado no debe interpretarse."
+        "Aquí encontrarás una ruta de aprendizaje, ejemplos y criterios para saber cuándo un resultado es confiable."
+    )
+
+    st.subheader("Empieza por tu pregunta")
+    st.markdown(
+        """
+        <div class="question-strip">
+          <div><b>¿Quiero observar o comparar?</b><span>Comienza por el Visor. Desde allí puedes enviar la muestra a otros análisis.</span></div>
+          <div><b>¿Quiero obtener un parámetro?</b><span>Usa Picos, Band gap, CIE, Colorimetría o Rendimiento cuántico según tu medición.</span></div>
+          <div><b>¿Puedo confiar en el resultado?</b><span>Revisa siempre el diagnóstico, el intervalo medido y las condiciones experimentales.</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.subheader("Herramientas disponibles")
     row_1 = st.columns(3)
     with row_1[0]:
-        tool_card("Visor de espectros", "Compara, recorta y procesa espectros sin inventar valores fuera del dominio medido.")
+        tool_card("📈", "Visor de espectros", "Compara y prepara espectros sin inventar datos.", "distinguir medición y procesamiento")
     with row_1[1]:
-        tool_card("Análisis de picos", "Ajusta componentes Gaussianas, Lorentzianas o pseudo-Voigt y examina sus residuos.")
+        tool_card("⛰️", "Análisis de picos", "Separa matemáticamente bandas superpuestas.", "leer centros, anchos, áreas y residuos")
     with row_1[2]:
-        tool_card("Band gap óptico", "Construye gráficos de Tauc bajo una hipótesis explícita que el usuario debe validar.")
+        tool_card("⚡", "Band gap óptico", "Explora Eg mediante modelos de Tauc.", "evitar confundir una hipótesis con una conclusión")
     row_2 = st.columns(3)
     with row_2[0]:
-        tool_card("CIE 1931", "Calcula cromaticidad de espectros de emisión y valida la geometría del locus.")
+        tool_card("🎨", "CIE 1931", "Ubica el color de una emisión en el diagrama xy.", "interpretar cromaticidad, longitud y pureza")
     with row_2[1]:
-        tool_card("Colorimetría", "Analiza reflectancia, transmitancia o emisión con observadores y condiciones declaradas.")
+        tool_card("🌈", "Colorimetría", "Describe objetos y emisiones bajo condiciones declaradas.", "escoger iluminante, observador y espacio de color")
     with row_2[2]:
-        tool_card("Rendimiento cuántico", "Aplica el método relativo exclusivamente a muestras en solución.")
+        tool_card("💡", "Rendimiento cuántico", "Compara una solución con una referencia conocida.", "reconocer las condiciones del método relativo")
 
-    st.subheader("Cómo utilizar esta documentación")
-    st.markdown(
-        """
-        1. Selecciona la herramienta en el menú lateral.
-        2. Comprueba primero los **datos requeridos** y las **condiciones experimentales**.
-        3. Revisa qué procesamiento aplica el programa antes de interpretar el resultado.
-        4. Atiende los diagnósticos `VALID`, `APPROXIMATE` o `INVALID`.
-        5. Conserva el paquete reproducible exportado junto con los datos originales.
-        """
+    st.subheader("Ruta recomendada")
+    step_flow(
+        ("Pregunta", "Define qué propiedad quieres observar o estimar."),
+        ("Datos", "Comprueba tipo de espectro, unidades y cobertura."),
+        ("Análisis", "Aplica el mínimo procesamiento necesario."),
+        ("Interpretación", "Revisa diagnóstico, incertidumbre y límites."),
     )
 
     st.subheader("Identificación")
@@ -279,6 +393,21 @@ elif selected == "Visor de espectros":
     page_header(
         "Visor de espectros",
         "Visualización comparativa y preprocesamiento controlado de espectros de absorción, emisión o excitación.",
+    )
+    plain_language(
+        "Es la mesa de trabajo inicial: permite mirar varios espectros juntos, limpiarlos con cuidado y decidir qué análisis tiene sentido después."
+    )
+    learning_goals(
+        "reconocer qué columnas necesita el programa",
+        "diferenciar recorte, suavizado y normalización",
+        "saber cuándo una FWHM global deja de ser válida",
+    )
+    st.subheader("Del archivo a una comparación")
+    step_flow(
+        ("Carga", "Selecciona longitud de onda y señal."),
+        ("Revisa", "Comprueba tipo, medio y rango realmente medido."),
+        ("Procesa", "Aplica solo las correcciones justificadas."),
+        ("Compara", "Observa máximos, áreas y formas espectrales."),
     )
     method(
         "El visor trabaja únicamente con los puntos medidos dentro del intervalo disponible. "
@@ -308,6 +437,10 @@ elif selected == "Visor de espectros":
         "El suavizado y la corrección de línea base modifican los datos. Deben registrarse sus parámetros y comprobarse "
         "contra el espectro original. La normalización elimina información sobre intensidad absoluta."
     )
+    guided_example(
+        "Dos emisiones con intensidades distintas",
+        "Si normalizas ambas a máximo = 1 podrás comparar la posición y la forma de las bandas, pero ya no podrás afirmar cuál muestra emitió con mayor intensidad absoluta.",
+    )
     st.subheader("Métricas")
     st.markdown(
         "El programa informa máximo, intensidad máxima y área integrada. La FWHM global solo se presenta cuando "
@@ -319,6 +452,21 @@ elif selected == "Análisis de picos":
     page_header(
         "Análisis de picos y deconvolución",
         "Separación matemática de bandas superpuestas con evaluación explícita de la calidad del ajuste.",
+    )
+    plain_language(
+        "Cuando una banda ancha parece contener varios máximos, esta herramienta prueba si puede describirse como la suma de componentes más simples."
+    )
+    learning_goals(
+        "entender qué representa una componente ajustada",
+        "comparar perfiles Gaussianos, Lorentzianos y pseudo-Voigt",
+        "usar residuos y métricas sin sobreinterpretar el ajuste",
+    )
+    st.subheader("Ruta del ajuste")
+    step_flow(
+        ("Intervalo", "Aísla la región espectral de interés."),
+        ("Picos", "Detecta máximos o propone centros manuales."),
+        ("Modelo", "Escoge perfil y línea base."),
+        ("Diagnóstico", "Examina componentes, residuos y métricas."),
     )
     method(
         "La señal se representa como la suma de una línea base y varios perfiles. El programa permite perfiles "
@@ -337,6 +485,10 @@ elif selected == "Análisis de picos":
         "Una componente ajustada no equivale automáticamente a una especie química, transición electrónica o mecanismo. "
         "La asignación requiere evidencia experimental independiente y bibliografía."
     )
+    guided_example(
+        "Una banda con hombro",
+        "Un buen ajuste con dos componentes indica que dos perfiles describen mejor la forma observada. No demuestra por sí solo que existan dos especies químicas.",
+    )
     st.subheader("Cuándo no se calcula")
     st.markdown(
         """
@@ -351,6 +503,21 @@ elif selected == "Band gap óptico":
     page_header(
         "Band gap óptico",
         "Estimación exploratoria mediante transformaciones de Tauc, condicionada al tipo de señal y a una hipótesis de transición.",
+    )
+    plain_language(
+        "El gráfico cambia porque cada hipótesis transforma la señal de manera diferente. Por eso también cambia la intersección utilizada como Eg."
+    )
+    learning_goals(
+        "declarar correctamente qué representa el eje Y",
+        "entender por qué cada hipótesis produce un Eg diferente",
+        "revisar el intervalo lineal antes de aceptar el resultado",
+    )
+    st.subheader("Cómo se construye una estimación")
+    step_flow(
+        ("Señal", "Declara absorbancia, α o reflectancia difusa."),
+        ("Hipótesis", "Elige una transformación de Tauc provisional."),
+        ("Intervalo", "Revisa la región aproximadamente lineal."),
+        ("Conclusión", "Reporta Eg condicionado a esa hipótesis."),
     )
     method(
         "El programa transforma la señal declarada a una magnitud óptica, construye (αhν)ᵖ frente a hν y extrapola "
@@ -381,6 +548,10 @@ elif selected == "Band gap óptico":
         "La naturaleza directa, indirecta, permitida o prohibida debe justificarse con el material, su estructura "
         "electrónica, el intervalo físico de ajuste y evidencia externa."
     )
+    guided_example(
+        "Un mismo espectro, cuatro valores de Eg",
+        "No debes escoger automáticamente el mayor, el menor ni el que tenga mejor R². Cada cifra responde a una pregunta distinta: “¿qué Eg resulta si esta hipótesis fuera válida?”.",
+    )
     st.subheader("Control de calidad")
     st.markdown(
         "El mismo intervalo energético se conserva al comparar hipótesis. Se muestran residuos, R², incertidumbre "
@@ -393,6 +564,21 @@ elif selected == "CIE 1931":
     page_header(
         "CIE 1931",
         "Coordenadas de cromaticidad para espectros de emisión mediante el observador colorimétrico estándar CIE 1931 de 2°.",
+    )
+    plain_language(
+        "Convierte la forma completa de un espectro de emisión en un punto x,y que resume su cromaticidad, es decir, su color sin expresar cuánto ilumina."
+    )
+    learning_goals(
+        "relacionar el espectro con X, Y, Z y las coordenadas x,y",
+        "distinguir cromaticidad de intensidad",
+        "reconocer por qué la cobertura espectral importa",
+    )
+    st.subheader("Del espectro al punto de color")
+    step_flow(
+        ("Espectro", "Usa intensidades medidas en el visible."),
+        ("Observador", "Combina la señal con x̄, ȳ y z̄."),
+        ("Integración", "Obtén los valores relativos X, Y y Z."),
+        ("Cromaticidad", "Normaliza y ubica el punto x,y."),
     )
     method(
         "El espectro de emisión se integra con las funciones de igualación de color x̄(λ), ȳ(λ) y z̄(λ) para obtener "
@@ -409,6 +595,10 @@ elif selected == "CIE 1931":
     caution(
         "No deben inventarse intensidades en longitudes de onda no medidas. Un espectro incompleto puede sesgar x, y, "
         "la longitud dominante y la pureza, especialmente si falta una banda o un extremo significativo."
+    )
+    guided_example(
+        "Dos espectros con el mismo color aparente",
+        "Si tienen formas relativas semejantes, uno puede ser diez veces más intenso y aun así producir coordenadas x,y casi iguales. La diferencia de brillo no queda representada por x,y.",
     )
     st.subheader("Longitud dominante y pureza")
     st.markdown(
@@ -427,6 +617,21 @@ elif selected == "Colorimetría":
     page_header(
         "Colorimetría",
         "Análisis de reflectancia, transmitancia y emisión con condiciones colorimétricas declaradas.",
+    )
+    plain_language(
+        "Para un objeto, el color depende tanto de la muestra como de la luz que la ilumina y del observador estándar elegido. Para una emisión, la luz proviene de la propia muestra."
+    )
+    learning_goals(
+        "escoger el modo correcto para reflectancia, transmitancia o emisión",
+        "entender el papel del iluminante y del observador",
+        "diferenciar un cálculo completo de una estimación aproximada",
+    )
+    st.subheader("Tres preguntas antes de calcular")
+    step_flow(
+        ("¿Qué medí?", "Reflectancia, transmitancia o emisión."),
+        ("¿Con qué unidades?", "Porcentaje, fracción o intensidad relativa."),
+        ("¿Bajo qué condiciones?", "Iluminante y observador cuando aplican."),
+        ("¿Qué cobertura?", "Completa 380–780 o aproximada 400–700 nm."),
     )
     st.subheader("Configuración según la medición")
     st.markdown(
@@ -459,6 +664,10 @@ elif selected == "Colorimetría":
         "La extensión de bordes es una hipótesis numérica, no una medición. El resultado aproximado debe reportar "
         "el intervalo real, el porcentaje de cobertura y el método aplicado."
     )
+    guided_example(
+        "El mismo sólido bajo D50 y D65",
+        "La reflectancia medida no cambia, pero los valores XYZ y Lab sí pueden cambiar porque el cálculo representa cómo se observaría el objeto bajo dos iluminantes distintos.",
+    )
     st.subheader("Comparación y temperatura correlacionada")
     st.markdown(
         "ΔE00 compara muestras bajo las mismas condiciones colorimétricas y respecto de una referencia seleccionada. "
@@ -470,6 +679,21 @@ elif selected == "Rendimiento cuántico":
     page_header(
         "Rendimiento cuántico relativo",
         "Método comparativo exclusivamente para muestras en solución y una referencia fluorescente conocida.",
+    )
+    plain_language(
+        "La muestra no se evalúa sola: se compara con una referencia conocida medida de la misma manera. Si las condiciones no son equivalentes, la comparación pierde validez."
+    )
+    learning_goals(
+        "identificar los datos de muestra y referencia",
+        "entender la corrección por fracción absorbida",
+        "reconocer los controles experimentales indispensables",
+    )
+    st.subheader("Comparación paso a paso")
+    step_flow(
+        ("Referencia", "Escoge un Φ conocido y apropiado."),
+        ("Absorción", "Mide A en la misma longitud de excitación."),
+        ("Emisión", "Corrige e integra toda la banda comparable."),
+        ("Corrección", "Aplica fracción absorbida e índices n²."),
     )
     method(
         "El rendimiento cuántico de fluorescencia es la relación entre los fotones emitidos y los fotones absorbidos. "
@@ -496,6 +720,10 @@ elif selected == "Rendimiento cuántico":
         "SpectraLab no calcula rendimiento cuántico de sólidos. Ese experimento requiere una esfera integradora, "
         "geometría, calibración y correcciones que no pueden sustituirse usando solamente reflectancia y área de emisión."
     )
+    guided_example(
+        "Muestra y referencia con absorbancias diferentes",
+        "Aunque sus áreas de emisión sean iguales, la que absorbió menos luz puede tener un Φ mayor. Por eso el programa compara fracciones absorbidas y no solo intensidades de emisión.",
+    )
     st.subheader("Referencia incluida")
     st.markdown(
         "El programa incluye datos de sulfato de quinina en H₂SO₄ 0,5 M como referencia trazable. El usuario debe "
@@ -507,7 +735,15 @@ elif selected == "Datos y diagnósticos":
     page_header(
         "Datos, formatos y diagnósticos",
         "Requisitos comunes para que un cálculo sea trazable y para comunicar claramente cuándo no puede realizarse.",
-        "Uso y reproducibilidad",
+        "Aprende a documentar",
+    )
+    plain_language(
+        "Un resultado científico no es solo una cifra: también necesita el archivo de origen, los parámetros usados y una explicación de cualquier limitación."
+    )
+    learning_goals(
+        "preparar un archivo que el programa pueda interpretar",
+        "diferenciar los estados VALID, APPROXIMATE e INVALID",
+        "conservar un análisis para que otra persona pueda revisarlo",
     )
     st.subheader("Archivos de entrada")
     st.markdown(
@@ -548,7 +784,15 @@ elif selected == "Validación y referencias":
     page_header(
         "Validación y referencias",
         "Fuentes normativas, pruebas internas y límites de la evidencia proporcionada por el software.",
-        "Rigor científico",
+        "Aprende a evaluar evidencia",
+    )
+    plain_language(
+        "Que el programa funcione correctamente no significa que cualquier dato de entrada ni cualquier interpretación sean correctos. La validación numérica y la validez experimental son preguntas distintas."
+    )
+    learning_goals(
+        "distinguir pruebas de software de validación experimental",
+        "identificar las referencias normativas principales",
+        "reportar la información mínima para reproducir un análisis",
     )
     st.subheader("Validación implementada")
     st.markdown(
