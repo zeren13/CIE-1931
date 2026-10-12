@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 import streamlit as st
@@ -177,7 +178,7 @@ st.markdown(
         margin: 0 0 .65rem;
         color: var(--ink);
     }
-    .concept-figure svg {
+    .concept-figure img {
         width: 100%;
         height: auto;
         display: block;
@@ -339,26 +340,28 @@ def guided_example(title: str, text: str) -> None:
 
 
 def concept_figure(title: str, svg: str, caption: str, view_box: str = "0 0 900 300") -> None:
+    svg_document = f'''<svg viewBox="{view_box}" role="img" aria-label="{title}" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .v-title {{ font: 700 18px system-ui, sans-serif; fill: #17212b; }}
+        .v-label {{ font: 650 15px system-ui, sans-serif; fill: #17212b; }}
+        .v-small {{ font: 13px system-ui, sans-serif; fill: #566572; }}
+        .v-tiny {{ font: 11px system-ui, sans-serif; fill: #566572; }}
+        .v-axis {{ stroke: #73818c; stroke-width: 1.4; }}
+        .v-grid {{ stroke: #e5ebef; stroke-width: 1; }}
+        .v-arrow {{ stroke: #6453a5; stroke-width: 2.5; fill: none; }}
+        .v-box {{ fill: #ffffff; stroke: #cfdbe2; stroke-width: 1.5; }}
+        .v-blue {{ fill: #eaf5fa; stroke: #256b8a; stroke-width: 1.5; }}
+        .v-green {{ fill: #edf8f2; stroke: #257052; stroke-width: 1.5; }}
+        .v-violet {{ fill: #f1eefb; stroke: #6453a5; stroke-width: 1.5; }}
+        .v-warn {{ fill: #fff8e8; stroke: #bc7b00; stroke-width: 1.5; }}
+      </style>
+      {svg}
+    </svg>'''
+    encoded_svg = base64.b64encode(svg_document.encode("utf-8")).decode("ascii")
     st.markdown(
         f'''<figure class="concept-figure">
         <h3>{title}</h3>
-        <svg viewBox="{view_box}" role="img" aria-label="{title}" xmlns="http://www.w3.org/2000/svg">
-          <style>
-            .v-title {{ font: 700 18px system-ui, sans-serif; fill: #17212b; }}
-            .v-label {{ font: 650 15px system-ui, sans-serif; fill: #17212b; }}
-            .v-small {{ font: 13px system-ui, sans-serif; fill: #566572; }}
-            .v-tiny {{ font: 11px system-ui, sans-serif; fill: #566572; }}
-            .v-axis {{ stroke: #73818c; stroke-width: 1.4; }}
-            .v-grid {{ stroke: #e5ebef; stroke-width: 1; }}
-            .v-arrow {{ stroke: #6453a5; stroke-width: 2.5; fill: none; }}
-            .v-box {{ fill: #ffffff; stroke: #cfdbe2; stroke-width: 1.5; }}
-            .v-blue {{ fill: #eaf5fa; stroke: #256b8a; stroke-width: 1.5; }}
-            .v-green {{ fill: #edf8f2; stroke: #257052; stroke-width: 1.5; }}
-            .v-violet {{ fill: #f1eefb; stroke: #6453a5; stroke-width: 1.5; }}
-            .v-warn {{ fill: #fff8e8; stroke: #bc7b00; stroke-width: 1.5; }}
-          </style>
-          {svg}
-        </svg>
+        <img src="data:image/svg+xml;base64,{encoded_svg}" alt="{title}" />
         <figcaption><b>Cómo leerla.</b> {caption}</figcaption>
         </figure>''',
         unsafe_allow_html=True,
