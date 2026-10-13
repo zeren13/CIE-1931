@@ -7,7 +7,7 @@ import streamlit as st
 
 
 APP_NAME = "SpectraLab Toolkit"
-APP_VERSION = "Beta 1.8"
+APP_VERSION = "Beta 1.9"
 APP_DIR = Path(__file__).resolve().parent
 LOGO_PATH = APP_DIR / "logog.jpg"
 UNIVERSITY_LOGO_PATH = APP_DIR / "logo_uniandes.svg"
@@ -389,6 +389,17 @@ def learning_goals(*goals: str) -> None:
         f'<div class="learn-goals"><h3>Al terminar esta sección podrás</h3><ul>{items}</ul></div>',
         unsafe_allow_html=True,
     )
+
+
+def module_terms(*terms: tuple[str, str]) -> None:
+    """Show a compact, in-context glossary at the end of a module."""
+    with st.expander("📘 Conceptos y términos de este módulo"):
+        st.caption(
+            "Definiciones breves para interpretar esta sección sin abandonar el módulo. "
+            "Las magnitudes y condiciones deben conservarse en cualquier informe exportado."
+        )
+        for term, definition in terms:
+            st.markdown(f"**{term}**  \n{definition}")
 
 
 def step_flow(*steps: tuple[str, str]) -> None:
@@ -910,6 +921,18 @@ elif selected == "Visor de espectros":
         "El programa informa máximo, intensidad máxima y área integrada. La FWHM global solo se presenta cuando "
         "se detecta un pico aislado; si existen varios máximos significativos, debe utilizarse Análisis de picos."
     )
+    module_terms(
+        ("Espectro", "Representación de una señal en función de la longitud de onda, la energía u otra variable espectral."),
+        ("Longitud de onda (λ)", "Distancia entre puntos equivalentes de una onda. En espectroscopia óptica suele expresarse en nanómetros (nm)."),
+        ("Absorbancia", "Magnitud logarítmica que expresa cuánto disminuye la radiación transmitida: A = −log₁₀(T). No es equivalente a intensidad de emisión."),
+        ("Intensidad", "Valor de la señal registrada por el instrumento. Solo es comparable de forma absoluta si se conservan escala y condiciones experimentales."),
+        ("Interpolación", "Estimación de valores entre puntos medidos. No añade información fuera del intervalo experimental ni debe confundirse con extrapolación."),
+        ("Suavizado", "Operación numérica que reduce variaciones rápidas o ruido. Una ventana excesiva puede desplazar máximos y eliminar hombros reales."),
+        ("Normalización", "Reescalado del espectro respecto al máximo o al área. Facilita comparar formas, pero elimina la intensidad absoluta."),
+        ("Línea base", "Contribución de fondo sobre la que aparece la señal espectral. Su corrección debe justificarse y documentarse."),
+        ("Área integrada", "Integral de la señal en un intervalo declarado. Depende del rango, la línea base, las unidades y el procesamiento aplicado."),
+        ("FWHM", "Anchura total de un pico a la mitad de su altura máxima. Es interpretable directamente cuando el pico está suficientemente aislado."),
+    )
 
 
 elif selected == "Análisis de picos":
@@ -984,6 +1007,18 @@ elif selected == "Análisis de picos":
         del rechazo en el diagnóstico exportado.
         """
     )
+    module_terms(
+        ("Pico", "Máximo local de una señal. Su existencia matemática no identifica por sí sola una especie o transición."),
+        ("Componente", "Función individual del modelo cuya suma contribuye al ajuste total. Es una descripción matemática, no necesariamente una entidad química."),
+        ("Deconvolución", "Separación matemática de una banda superpuesta en varias componentes bajo un modelo y unas restricciones declaradas."),
+        ("Perfil Gaussiano", "Función simétrica asociada con frecuencia a ensanchamientos estadísticos o inhomogéneos."),
+        ("Perfil Lorentziano", "Función simétrica con colas más extensas, relacionada en ciertos contextos con ensanchamiento homogéneo."),
+        ("Pseudo-Voigt", "Combinación aproximada de contribuciones Gaussianas y Lorentzianas."),
+        ("Prominencia", "Altura de un máximo respecto a su entorno local; se utiliza para distinguir picos de pequeñas fluctuaciones."),
+        ("Residuo", "Diferencia punto a punto entre el dato observado y el valor calculado por el modelo."),
+        ("RMSE", "Raíz del error cuadrático medio. Resume el tamaño típico de los residuos en las unidades de la señal."),
+        ("AIC", "Criterio de información que equilibra calidad de ajuste y número de parámetros; es útil para comparar modelos aplicados a los mismos datos."),
+    )
 
 
 elif selected == "Band gap óptico":
@@ -1050,6 +1085,18 @@ elif selected == "Band gap óptico":
         "El mismo intervalo energético se conserva al comparar hipótesis. Se muestran residuos, R², incertidumbre "
         "estadística aproximada de Eg y sensibilidad frente a pequeños cambios de los límites. El resultado permanece "
         "como exploratorio hasta confirmar manualmente el intervalo."
+    )
+    module_terms(
+        ("Band gap (Eg)", "Diferencia energética entre los estados electrónicos ocupados y desocupados relevantes para la transición óptica considerada."),
+        ("Energía del fotón (hν)", "Energía asociada a la radiación; puede calcularse como hν = hc/λ y suele expresarse en electronvoltios (eV)."),
+        ("Coeficiente de absorción (α)", "Magnitud que describe la atenuación de la radiación por unidad de longitud. Su obtención rigurosa requiere espesor y datos ópticos adecuados."),
+        ("Transformación de Tauc", "Representación de una potencia de αhν frente a hν para explorar un borde de absorción bajo una hipótesis de transición."),
+        ("Transición directa", "Hipótesis en la que los estados inicial y final pueden conectarse sin un cambio significativo del momento cristalino."),
+        ("Transición indirecta", "Hipótesis que normalmente requiere participación de un fonón para conservar el momento cristalino."),
+        ("Permitida o prohibida", "Clasificación asociada a reglas de selección y probabilidades de transición; no puede deducirse únicamente del Eg calculado."),
+        ("Kubelka–Munk", "Transformación aproximada de reflectancia difusa, F(R) = (1−R)²/(2R), usada bajo supuestos como dispersión suficientemente constante."),
+        ("Intervalo lineal", "Región seleccionada para el ajuste y la extrapolación. Debe corresponder al borde pertinente, no solo a la zona con mayor R²."),
+        ("R²", "Fracción de variación descrita por el ajuste lineal. Un valor alto no demuestra que la hipótesis física sea correcta."),
     )
 
 
@@ -1132,6 +1179,18 @@ elif selected == "Color y colorimetría":
             "Extender bordes o suponer intensidad cero no crea datos medidos. El informe debe conservar el intervalo real, "
             "el diagnóstico y la hipótesis aplicada."
         )
+    module_terms(
+        ("Funciones de igualación de color", "Funciones del observador estándar que ponderan cada longitud de onda para calcular los valores triestímulo CIE XYZ."),
+        ("Observador estándar", "Modelo colorimétrico CIE de la respuesta visual promedio; debe indicarse, por ejemplo, 2° o 10°."),
+        ("Valores triestímulo XYZ", "Tres valores calculados al integrar el espectro con el observador y, para objetos, con el iluminante."),
+        ("Coordenadas x,y", "Normalización de XYZ que describe cromaticidad sin conservar por sí sola la magnitud luminosa."),
+        ("Locus espectral", "Borde del diagrama CIE 1931 formado por cromaticidades de radiaciones monocromáticas visibles."),
+        ("Iluminante", "Distribución espectral normalizada que representa una fuente de iluminación definida, como D65 o D50."),
+        ("CIELAB", "Espacio de color aproximadamente uniforme definido por L*, a* y b* respecto a un blanco de referencia."),
+        ("ΔE00", "Diferencia de color CIEDE2000 entre dos coordenadas CIELAB calculadas bajo condiciones comparables."),
+        ("CCT", "Temperatura de color correlacionada de una emisión próxima al locus de Planck; no es una temperatura física de la muestra."),
+        ("Duv", "Distancia con signo respecto al locus de Planck en un espacio de cromaticidad aproximadamente uniforme."),
+    )
 
 
 elif selected == "Rendimiento cuántico":
@@ -1194,6 +1253,18 @@ elif selected == "Rendimiento cuántico":
     st.markdown(
         "El programa incluye datos de sulfato de quinina en H₂SO₄ 0,5 M como referencia trazable. El usuario debe "
         "comprobar que el valor de Φ, la longitud de excitación y las condiciones coincidan con su experimento."
+    )
+    module_terms(
+        ("Rendimiento cuántico de fluorescencia (Φ)", "Relación entre el número de fotones emitidos y el número de fotones absorbidos por la muestra."),
+        ("Método relativo", "Estimación de Φ mediante comparación con una referencia conocida medida bajo condiciones equivalentes."),
+        ("Referencia", "Compuesto con rendimiento cuántico documentado para un solvente, una excitación y unas condiciones específicas."),
+        ("Absorbancia de excitación", "Absorbancia evaluada en la longitud de onda utilizada para excitar muestra y referencia."),
+        ("Fracción absorbida", "Proporción de radiación incidente absorbida, expresada en el método como 1−10⁻ᴬ."),
+        ("Área de emisión", "Integral del espectro de fluorescencia corregido sobre toda la banda comparable."),
+        ("Índice de refracción (n)", "Propiedad óptica del medio incluida mediante la corrección n² en la formulación relativa utilizada."),
+        ("Filtro interno", "Distorsión causada por absorción apreciable de la luz de excitación o de la propia emisión dentro de la cubeta."),
+        ("Reabsorción", "Absorción de fotones emitidos por la misma muestra antes de alcanzar el detector."),
+        ("Respuesta espectral instrumental", "Variación de la sensibilidad del sistema con la longitud de onda; debe corregirse para integrar emisiones comparables."),
     )
 
 
@@ -1266,6 +1337,18 @@ elif selected == "Datos y diagnósticos":
         "Cuando un análisis se rechaza, el paquete conserva el motivo y los datos procesables, pero deja vacíos los "
         "resultados que no pudieron calcularse. No se fuerza una cifra mediante interpolación o extrapolación oculta."
     )
+    module_terms(
+        ("Dato faltante", "Celda sin un valor utilizable. Su eliminación puede cambiar la cobertura o dejar un intervalo insuficiente."),
+        ("Valor no finito", "Resultado como NaN o infinito que no puede participar en un cálculo numérico válido."),
+        ("Cobertura espectral", "Intervalo de longitudes de onda efectivamente medido con datos válidos y continuidad suficiente."),
+        ("Metadatos", "Información que describe el origen, las unidades, las condiciones, el procesamiento y la versión del análisis."),
+        ("Trazabilidad", "Capacidad de relacionar un resultado con sus datos de origen, parámetros, método y versión del software."),
+        ("Reproducibilidad computacional", "Posibilidad de repetir el cálculo con los mismos datos, parámetros y versión y obtener resultados consistentes."),
+        ("VALID", "Estado en el que se superan las verificaciones implementadas; no sustituye la evaluación científica del experimento."),
+        ("APPROXIMATE", "Estado en el que puede calcularse un resultado, pero depende de una limitación o aproximación que debe declararse."),
+        ("INVALID", "Estado en el que los datos o controles no permiten producir una cifra defendible."),
+        ("SHA-256", "Huella digital del archivo utilizada para identificar si los datos de origen son exactamente los mismos."),
+    )
 
 
 elif selected == "Validación y referencias":
@@ -1330,6 +1413,18 @@ elif selected == "Validación y referencias":
         "Versión del programa, módulo, archivo original, parámetros, procesamiento, intervalo analizado, modelo o "
         "hipótesis, diagnóstico, incertidumbre disponible y referencia bibliográfica del método."
     )
+    module_terms(
+        ("Verificación", "Comprobación de que el software implementa correctamente las operaciones y requisitos especificados."),
+        ("Validación", "Evaluación de si el método y el programa son adecuados para el uso científico previsto."),
+        ("Caso de referencia", "Entrada cuyo resultado esperado se conoce por una fuente independiente o un cálculo trazable."),
+        ("Prueba unitaria", "Ensayo automatizado de una función o comportamiento delimitado del código."),
+        ("Material de referencia", "Material suficientemente caracterizado utilizado para comprobar mediciones o métodos bajo condiciones definidas."),
+        ("Incertidumbre", "Parámetro que caracteriza la dispersión razonablemente atribuible al resultado; no equivale únicamente al error del ajuste."),
+        ("Exactitud", "Cercanía entre un resultado y un valor de referencia aceptado."),
+        ("Precisión", "Grado de concordancia entre resultados obtenidos mediante mediciones repetidas."),
+        ("Trazabilidad metrológica", "Relación documentada con una referencia mediante una cadena de calibraciones que contribuyen a la incertidumbre."),
+        ("Revisión experimental", "Evaluación de preparación, instrumento, controles y contexto físico necesaria antes de aceptar una interpretación."),
+    )
 
 
 elif selected == "Historial de cambios":
@@ -1338,7 +1433,16 @@ elif selected == "Historial de cambios":
         "Resumen de las modificaciones que afectan la interpretación científica y la reproducibilidad.",
         "Versiones",
     )
-    with st.expander("Beta 1.8 — simplificación visual y figura CIE oficial", expanded=True):
+    with st.expander("Beta 1.9 — explicaciones y términos dentro de cada módulo", expanded=True):
+        st.markdown(
+            """
+            - Cada módulo incorpora al final un bloque desplegable de conceptos y definiciones contextuales.
+            - Se explican magnitudes, operaciones, resultados y advertencias sin obligar a salir a un glosario separado.
+            - Las definiciones distinguen el significado matemático, experimental y físico de los términos más importantes.
+            - La portada, los autores, la licencia y la identidad institucional se mantienen sin cambios.
+            """
+        )
+    with st.expander("Beta 1.8 — simplificación visual y figura CIE oficial"):
         st.markdown(
             """
             - Se eliminan las guías visuales de Band gap, CIE y Rendimiento cuántico.
