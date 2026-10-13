@@ -7,7 +7,7 @@ import streamlit as st
 
 
 APP_NAME = "SpectraLab Toolkit"
-APP_VERSION = "Beta 1.6"
+APP_VERSION = "Beta 1.7"
 APP_DIR = Path(__file__).resolve().parent
 LOGO_PATH = APP_DIR / "logog.jpg"
 
@@ -208,13 +208,69 @@ st.markdown(
     .reading-box b { display:block; color:var(--blue); margin-bottom:.3rem; }
     .reading-box span { color:var(--muted); font-size:.88rem; line-height:1.48; }
     .demo-note {
-        border: 1px dashed #98b9c8;
-        background: #f4fafc;
+        border: 1px solid #cfe0e8;
+        border-left: 4px solid var(--blue);
+        background: #f7fbfd;
         border-radius: 10px;
         color: #3f5967;
         font-size: .88rem;
-        padding: .72rem .85rem;
-        margin: .2rem 0 .9rem;
+        padding: .78rem .9rem;
+        margin: .15rem 0 1.1rem;
+    }
+    div[data-testid="stExpander"] {
+        border: 1px solid #cfdde5;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fbfdfe;
+        box-shadow: 0 8px 24px rgba(31, 54, 68, .055);
+        margin: 1.15rem 0 1.45rem;
+    }
+    div[data-testid="stExpander"] details > summary {
+        background: linear-gradient(90deg, #eef7fa 0%, #f8fbfc 100%);
+        color: #174f68;
+        font-weight: 750;
+        padding: .9rem 1rem;
+    }
+    div[data-testid="stExpander"] details[open] > summary {
+        border-bottom: 1px solid #dce7ec;
+    }
+    div[data-testid="stMetric"] {
+        border: 1px solid #dbe5ea;
+        border-radius: 12px;
+        background: #fff;
+        padding: .7rem .9rem;
+    }
+    .result-panel {
+        border: 1px solid #ccdce4;
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 1rem 1.1rem;
+        margin: .7rem 0 1rem;
+    }
+    .result-panel .result-label {
+        display: block;
+        color: var(--muted);
+        font-size: .73rem;
+        font-weight: 750;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: .35rem;
+    }
+    .result-panel .result-value {
+        color: var(--ink);
+        font-size: 1.35rem;
+        font-weight: 780;
+    }
+    .route-chip {
+        display: inline-block;
+        border: 1px solid #c9dce5;
+        border-radius: 999px;
+        background: #f4fafc;
+        color: #245b73;
+        font-size: .82rem;
+        font-weight: 700;
+        padding: .34rem .7rem;
+        margin: .15rem .28rem .15rem 0;
     }
     .question-strip {
         display:grid;
@@ -272,8 +328,7 @@ SECTIONS = [
     "Visor de espectros",
     "Análisis de picos",
     "Band gap óptico",
-    "CIE 1931",
-    "Colorimetría",
+    "Color y colorimetría",
     "Rendimiento cuántico",
     "Datos y diagnósticos",
     "Validación y referencias",
@@ -285,8 +340,7 @@ SECTION_ICONS = {
     "Visor de espectros": "📈",
     "Análisis de picos": "⛰️",
     "Band gap óptico": "⚡",
-    "CIE 1931": "🎨",
-    "Colorimetría": "🌈",
+    "Color y colorimetría": "🎨",
     "Rendimiento cuántico": "💡",
     "Datos y diagnósticos": "🗂️",
     "Validación y referencias": "✅",
@@ -401,12 +455,32 @@ def style_demo_figure(fig: go.Figure, x_title: str, y_title: str, height: int = 
     fig.update_layout(
         template="plotly_white",
         height=height,
-        margin=dict(l=35, r=20, t=30, b=40),
+        margin=dict(l=48, r=22, t=44, b=50),
         xaxis_title=x_title,
         yaxis_title=y_title,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        font=dict(family="Arial, sans-serif", size=13, color="#283640"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#ffffff",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.04,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(255,255,255,.88)",
+        ),
         hovermode="x unified",
     )
+    fig.update_xaxes(showline=True, linecolor="#9eb0ba", gridcolor="#e8eef1", zeroline=False)
+    fig.update_yaxes(showline=True, linecolor="#9eb0ba", gridcolor="#e8eef1", zeroline=False)
+
+
+PLOT_CONFIG = {
+    "displaylogo": False,
+    "displayModeBar": "hover",
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+    "scrollZoom": False,
+}
 
 
 def viewer_demo() -> None:
@@ -440,7 +514,7 @@ def viewer_demo() -> None:
             fig.add_trace(go.Scatter(x=wavelengths, y=measured, name="Medición simulada", line=dict(color="#9e2f2b", width=1.4)))
         fig.add_trace(go.Scatter(x=wavelengths, y=processed, name="Resultado procesado", line=dict(color="#256b8a", width=3)))
         style_demo_figure(fig, "Longitud de onda (nm)", "Señal")
-        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         st.caption("Observa si una ventana grande elimina ruido o también borra el hombro cercano a 610 nm.")
 
 
@@ -461,7 +535,7 @@ def peaks_demo() -> None:
             fig.add_trace(go.Scatter(x=wavelengths, y=component_2 + 0.04, name="Componente 2", line=dict(color="#9e2f2b", dash="dash")))
         fig.add_trace(go.Scatter(x=wavelengths, y=total, name="Suma observada", line=dict(color="#17212b", width=4)))
         style_demo_figure(fig, "Longitud de onda (nm)", "Intensidad relativa")
-        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         if separation < 45:
             st.warning("Los centros están muy próximos: la banda puede parecer un único máximo y el ajuste será más ambiguo.")
         else:
@@ -501,7 +575,7 @@ def band_gap_demo() -> None:
         if np.isfinite(estimated_eg):
             fig.add_vline(x=estimated_eg, line_dash="dot", line_color="#257052")
         style_demo_figure(fig, "Energía hν (eV)", f"(αhν)^{powers[hypothesis]:.3g}")
-        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         metrics = st.columns(3)
         metrics[0].metric("Eg simulado real", "2,20 eV")
         metrics[1].metric("Eg extrapolado", f"{estimated_eg:.3f} eV")
@@ -509,92 +583,190 @@ def band_gap_demo() -> None:
         st.caption("Cambia la hipótesis o el intervalo: un R² alto no convierte automáticamente esa hipótesis en la correcta.")
 
 
-def cie_demo() -> None:
-    with st.expander("▶ Prueba interactiva · del espectro al punto CIE"):
-        demo_note("Las funciones de igualación usadas aquí son aproximaciones analíticas para visualizar la relación, no tablas normativas.")
-        controls = st.columns(2)
-        center = controls[0].slider("Centro de emisión (nm)", 420, 680, 540, 5, key="demo_cie_center")
-        fwhm = controls[1].slider("FWHM de la banda (nm)", 10, 140, 55, 5, key="demo_cie_fwhm")
-        wavelengths = np.arange(380.0, 781.0, 1.0)
-        sigma = fwhm / 2.35482
-        emission = np.exp(-0.5 * ((wavelengths - center) / sigma) ** 2)
-        x_bar = (
-            0.362 * np.exp(-0.5 * ((wavelengths - 442.0) / 16.0) ** 2)
-            + 1.056 * np.exp(-0.5 * ((wavelengths - 599.8) / 37.9) ** 2)
-            - 0.065 * np.exp(-0.5 * ((wavelengths - 501.1) / 20.4) ** 2)
+def color_science_demo() -> None:
+    with st.expander("Laboratorio interactivo · color y colorimetría"):
+        demo_note(
+            "Permite comparar las dos rutas de cálculo con datos simulados. Las funciones CIE son aproximaciones "
+            "analíticas para enseñanza y no sustituyen las tablas normativas del programa."
         )
-        y_bar = 0.821 * np.exp(-0.5 * ((wavelengths - 568.8) / 46.9) ** 2) + 0.286 * np.exp(-0.5 * ((wavelengths - 530.9) / 16.3) ** 2)
-        z_bar = 1.217 * np.exp(-0.5 * ((wavelengths - 437.0) / 11.8) ** 2) + 0.681 * np.exp(-0.5 * ((wavelengths - 459.0) / 26.0) ** 2)
-        xyz = np.array([
-            np.trapezoid(emission * x_bar, wavelengths),
-            np.trapezoid(emission * y_bar, wavelengths),
-            np.trapezoid(emission * z_bar, wavelengths),
-        ])
-        chromaticity = xyz[:2] / max(float(np.sum(xyz)), 1e-12)
+        route = st.radio(
+            "¿Qué tipo de dato quieres explorar?",
+            ["Emisión luminiscente", "Reflectancia o transmitancia"],
+            horizontal=True,
+            key="demo_color_route",
+        )
 
-        spectrum_fig = go.Figure(go.Scatter(x=wavelengths, y=emission, line=dict(color="#9e2f2b", width=3), name="Emisión"))
-        style_demo_figure(spectrum_fig, "Longitud de onda (nm)", "Intensidad relativa", 320)
-        locus_x = [0.174, 0.164, 0.144, 0.091, 0.008, 0.074, 0.230, 0.373, 0.513, 0.627, 0.692, 0.719, 0.735, 0.174]
-        locus_y = [0.005, 0.011, 0.030, 0.133, 0.538, 0.834, 0.754, 0.625, 0.487, 0.373, 0.308, 0.281, 0.265, 0.005]
-        cie_fig = go.Figure()
-        cie_fig.add_trace(go.Scatter(x=locus_x, y=locus_y, mode="lines", fill="toself", fillcolor="rgba(80,120,210,.10)", line=dict(color="#17212b"), name="Locus aproximado"))
-        cie_fig.add_trace(go.Scatter(x=[chromaticity[0]], y=[chromaticity[1]], mode="markers", marker=dict(size=14, color="#9e2f2b"), name="Emisión"))
-        cie_fig.update_yaxes(scaleanchor="x", scaleratio=1)
-        style_demo_figure(cie_fig, "x", "y", 320)
-        plots = st.columns(2)
-        plots[0].plotly_chart(spectrum_fig, width="stretch", config={"displaylogo": False})
-        plots[1].plotly_chart(cie_fig, width="stretch", config={"displaylogo": False})
-        st.metric("Coordenadas aproximadas", f"x = {chromaticity[0]:.3f} · y = {chromaticity[1]:.3f}")
-        st.caption("Mueve el centro o ensancha la banda y observa que la cromaticidad depende de toda la distribución espectral.")
+        if route == "Emisión luminiscente":
+            controls = st.columns(2)
+            center = controls[0].slider("Centro de emisión (nm)", 420, 680, 540, 5, key="demo_color_center")
+            fwhm = controls[1].slider("Ancho FWHM (nm)", 10, 140, 55, 5, key="demo_color_fwhm")
+            wavelengths = np.arange(380.0, 781.0, 1.0)
+            sigma = fwhm / 2.35482
+            emission = np.exp(-0.5 * ((wavelengths - center) / sigma) ** 2)
+            x_bar = (
+                0.362 * np.exp(-0.5 * ((wavelengths - 442.0) / 16.0) ** 2)
+                + 1.056 * np.exp(-0.5 * ((wavelengths - 599.8) / 37.9) ** 2)
+                - 0.065 * np.exp(-0.5 * ((wavelengths - 501.1) / 20.4) ** 2)
+            )
+            y_bar = 0.821 * np.exp(-0.5 * ((wavelengths - 568.8) / 46.9) ** 2) + 0.286 * np.exp(-0.5 * ((wavelengths - 530.9) / 16.3) ** 2)
+            z_bar = 1.217 * np.exp(-0.5 * ((wavelengths - 437.0) / 11.8) ** 2) + 0.681 * np.exp(-0.5 * ((wavelengths - 459.0) / 26.0) ** 2)
+            xyz = np.array([
+                np.trapezoid(emission * x_bar, wavelengths),
+                np.trapezoid(emission * y_bar, wavelengths),
+                np.trapezoid(emission * z_bar, wavelengths),
+            ])
+            chromaticity = xyz[:2] / max(float(np.sum(xyz)), 1e-12)
 
+            spectrum_fig = go.Figure()
+            spectrum_fig.add_trace(
+                go.Scatter(
+                    x=wavelengths,
+                    y=emission,
+                    line=dict(color="#9e2f2b", width=3),
+                    fill="tozeroy",
+                    fillcolor="rgba(158,47,43,.12)",
+                    name="Emisión simulada",
+                )
+            )
+            style_demo_figure(spectrum_fig, "Longitud de onda (nm)", "Intensidad relativa", 330)
+            spectrum_fig.update_layout(title=dict(text="Distribución espectral", font=dict(size=15)))
 
-def colorimetry_demo() -> None:
-    with st.expander("▶ Prueba interactiva · configura una medición colorimétrica"):
-        demo_note("Este ejercicio decide qué condiciones y advertencias corresponden; no calcula valores colorimétricos normativos.")
-        controls = st.columns(3)
-        measurement = controls[0].selectbox("Tipo de medición", ["Reflectancia", "Transmitancia", "Emisión"], key="demo_color_type")
-        illuminant = controls[1].selectbox("Iluminante", ["D65", "D50", "A"], disabled=measurement == "Emisión", key="demo_color_illuminant")
-        observer = controls[2].selectbox("Observador", ["2°", "10°"], key="demo_color_observer")
-        coverage = st.slider("Cobertura medida (nm)", 360, 830, (400, 700), 5, key="demo_color_coverage")
+            locus_x = [0.174, 0.164, 0.144, 0.091, 0.008, 0.074, 0.230, 0.373, 0.513, 0.627, 0.692, 0.719, 0.735, 0.174]
+            locus_y = [0.005, 0.011, 0.030, 0.133, 0.538, 0.834, 0.754, 0.625, 0.487, 0.373, 0.308, 0.281, 0.265, 0.005]
+            cie_fig = go.Figure()
+            cie_fig.add_trace(
+                go.Scatter(
+                    x=locus_x,
+                    y=locus_y,
+                    mode="lines",
+                    fill="toself",
+                    fillcolor="rgba(37,107,138,.10)",
+                    line=dict(color="#50616c", width=2),
+                    name="Locus aproximado",
+                )
+            )
+            cie_fig.add_trace(
+                go.Scatter(
+                    x=[chromaticity[0]],
+                    y=[chromaticity[1]],
+                    mode="markers",
+                    marker=dict(size=15, color="#9e2f2b", line=dict(color="#ffffff", width=2)),
+                    name="Emisión",
+                )
+            )
+            style_demo_figure(cie_fig, "Coordenada x", "Coordenada y", 330)
+            cie_fig.update_layout(title=dict(text="Cromaticidad CIE 1931", font=dict(size=15)), hovermode="closest")
+            cie_fig.update_xaxes(range=[0, 0.8])
+            cie_fig.update_yaxes(range=[0, 0.9], scaleanchor="x", scaleratio=1)
 
-        if coverage[0] <= 380 and coverage[1] >= 780:
-            status, message = "VALID", "La cobertura satisface el intervalo completo usado por el programa."
-            st.success(f"{status} · {message}")
-        elif coverage[0] <= 400 and coverage[1] >= 700:
-            status = "APPROXIMATE"
-            assumption = "intensidad cero" if measurement == "Emisión" else "prolongación de los valores de borde"
-            st.warning(f"{status} · Se requiere {assumption} fuera del intervalo medido.")
+            plots = st.columns([1.15, 1])
+            plots[0].plotly_chart(spectrum_fig, width="stretch", config=PLOT_CONFIG)
+            plots[1].plotly_chart(cie_fig, width="stretch", config=PLOT_CONFIG)
+            metrics = st.columns(3)
+            metrics[0].metric("Coordenada x", f"{chromaticity[0]:.3f}")
+            metrics[1].metric("Coordenada y", f"{chromaticity[1]:.3f}")
+            metrics[2].metric("Tipo de resultado", "Cromaticidad")
+            st.caption("La posición depende de la banda completa. La intensidad absoluta no queda representada por x,y.")
         else:
-            status = "INVALID"
-            st.error("INVALID · La cobertura es insuficiente para esta demostración colorimétrica.")
+            controls = st.columns(3)
+            measurement = controls[0].selectbox(
+                "Medición", ["Reflectancia", "Transmitancia"], key="demo_object_measurement"
+            )
+            illuminant = controls[1].selectbox("Iluminante", ["D65", "D50", "A"], key="demo_object_illuminant")
+            observer = controls[2].selectbox("Observador", ["2°", "10°"], key="demo_object_observer")
+            coverage = st.slider("Intervalo realmente medido (nm)", 360, 830, (400, 700), 5, key="demo_object_coverage")
 
-        if measurement == "Emisión":
-            st.markdown(f"**Ruta aplicada:** emisión × observador {observer} → XYZ relativo → xy / u′v′")
-            st.caption("El iluminante está desactivado porque la emisión es la distribución espectral de la fuente.")
-        else:
-            st.markdown(f"**Ruta aplicada:** iluminante {illuminant} × {measurement.lower()} × observador {observer} → XYZ → Lab / LCh / xy")
+            wavelengths = np.linspace(380.0, 780.0, 401)
+            curve = 0.20 + 0.55 / (1.0 + np.exp(-(wavelengths - 570.0) / 25.0))
+            curve -= 0.09 * np.exp(-0.5 * ((wavelengths - 455.0) / 28.0) ** 2)
+            curve = np.clip(curve, 0.0, 1.0)
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=wavelengths,
+                    y=100 * curve,
+                    line=dict(color="#256b8a", width=3),
+                    fill="tozeroy",
+                    fillcolor="rgba(37,107,138,.10)",
+                    name=f"{measurement} simulada",
+                )
+            )
+            style_demo_figure(fig, "Longitud de onda (nm)", f"{measurement} (%)", 315)
+            fig.update_layout(title=dict(text="Señal espectral del objeto", font=dict(size=15)))
+            st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
+
+            if coverage[0] <= 380 and coverage[1] >= 780:
+                st.success("VALID · Cobertura completa para la ruta implementada por el programa.")
+            elif coverage[0] <= 400 and coverage[1] >= 700:
+                st.warning("APPROXIMATE · Se prolongarían los valores de borde; la hipótesis debe quedar reportada.")
+            else:
+                st.error("INVALID · La cobertura es insuficiente para un resultado colorimétrico defendible.")
+            st.markdown(
+                f'<div class="result-panel"><span class="result-label">Ruta aplicada</span>'
+                f'<span class="route-chip">Iluminante {illuminant}</span>'
+                f'<span class="route-chip">{measurement}</span>'
+                f'<span class="route-chip">Observador {observer}</span>'
+                f'<span class="route-chip">XYZ → Lab · LCh · xy</span></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption("Mantén iluminante, observador y geometría constantes cuando compares dos muestras.")
 
 
 def quantum_yield_demo() -> None:
-    with st.expander("▶ Prueba interactiva · rendimiento cuántico relativo"):
-        demo_note("Los controles representan dos soluciones medidas bajo condiciones equivalentes.")
-        row_1 = st.columns(3)
-        phi_ref = row_1[0].slider("Φ de referencia", 0.05, 1.00, 0.55, 0.01, key="demo_qy_phi_ref")
-        area_ratio = row_1[1].slider("Ix / Iref", 0.10, 2.50, 1.00, 0.05, key="demo_qy_area")
-        absorbance_sample = row_1[2].slider("Ax", 0.01, 0.30, 0.06, 0.01, key="demo_qy_ax")
-        row_2 = st.columns(3)
-        absorbance_ref = row_2[0].slider("Aref", 0.01, 0.30, 0.06, 0.01, key="demo_qy_aref")
-        n_sample = row_2[1].slider("nx", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nx")
-        n_ref = row_2[2].slider("nref", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nref")
+    with st.expander("Laboratorio interactivo · rendimiento cuántico relativo"):
+        demo_note(
+            "Representa dos soluciones medidas con la misma excitación y configuración. Cambia una variable por vez "
+            "para reconocer su efecto sobre el resultado."
+        )
+        primary = st.columns(3)
+        phi_ref = primary[0].slider("Φ de la referencia", 0.05, 1.00, 0.55, 0.01, key="demo_qy_phi_ref")
+        area_ratio = primary[1].slider("Relación de áreas Ix / Iref", 0.10, 2.50, 1.00, 0.05, key="demo_qy_area")
+        absorbance_sample = primary[2].slider("Absorbancia de muestra Ax", 0.01, 0.30, 0.06, 0.01, key="demo_qy_ax")
+        secondary = st.columns(3)
+        absorbance_ref = secondary[0].slider("Absorbancia de referencia Aref", 0.01, 0.30, 0.06, 0.01, key="demo_qy_aref")
+        n_sample = secondary[1].slider("Índice del solvente nx", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nx")
+        n_ref = secondary[2].slider("Índice del solvente nref", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nref")
         absorbed_sample = 1.0 - 10.0 ** (-absorbance_sample)
         absorbed_ref = 1.0 - 10.0 ** (-absorbance_ref)
         phi_sample = phi_ref * area_ratio * (absorbed_ref / absorbed_sample) * (n_sample / n_ref) ** 2
-        st.metric("Φ calculado para la muestra", f"{phi_sample:.3f}")
+
+        sensitivity_a = np.linspace(0.01, 0.30, 160)
+        sensitivity_phi = phi_ref * area_ratio * (absorbed_ref / (1.0 - 10.0 ** (-sensitivity_a))) * (n_sample / n_ref) ** 2
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=sensitivity_a,
+                y=sensitivity_phi,
+                line=dict(color="#256b8a", width=3),
+                name="Sensibilidad a Ax",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[absorbance_sample],
+                y=[phi_sample],
+                mode="markers",
+                marker=dict(size=14, color="#9e2f2b", line=dict(color="#ffffff", width=2)),
+                name="Configuración actual",
+            )
+        )
+        style_demo_figure(fig, "Absorbancia de muestra Ax", "Φ relativo calculado", 320)
+        fig.update_layout(title=dict(text="Sensibilidad del resultado a la absorbancia", font=dict(size=15)), hovermode="closest")
+        fig.update_yaxes(rangemode="tozero")
+        result_plot, result_value = st.columns([1.45, 0.75])
+        result_plot.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
+        with result_value:
+            st.metric("Φ de la muestra", f"{phi_sample:.3f}")
+            st.metric("Fracción absorbida", f"{100 * absorbed_sample:.1f} %")
+            st.caption("Resultado didáctico calculado con el método relativo.")
+
         if absorbance_sample > 0.10 or absorbance_ref > 0.10:
             st.warning("Una o ambas absorbancias superan 0,10: aumenta el riesgo de filtro interno y reabsorción.")
         if phi_sample > 1.0:
             st.error("El resultado supera 1. Revisa unidades, linealidad, correcciones instrumentales y equivalencia experimental.")
-        st.caption("Prueba a mantener las áreas iguales y cambiar Ax: la solución que absorbió menos puede producir un Φ calculado mayor.")
+        else:
+            st.success("El valor permanece en el intervalo físico 0–1; todavía deben comprobarse las condiciones experimentales.")
+        st.caption("Mantén Ix/Iref fijo y cambia Ax: la curva muestra por qué el área de emisión no puede interpretarse sola.")
 
 
 def diagnostics_demo() -> None:
@@ -651,7 +823,7 @@ if selected == "Inicio":
         """
         <div class="question-strip">
           <div><b>¿Quiero observar o comparar?</b><span>Comienza por el Visor. Desde allí puedes enviar la muestra a otros análisis.</span></div>
-          <div><b>¿Quiero obtener un parámetro?</b><span>Usa Picos, Band gap, CIE, Colorimetría o Rendimiento cuántico según tu medición.</span></div>
+          <div><b>¿Quiero obtener un parámetro?</b><span>Usa Picos, Band gap, Color y colorimetría o Rendimiento cuántico según tu medición.</span></div>
           <div><b>¿Puedo confiar en el resultado?</b><span>Revisa siempre el diagnóstico, el intervalo medido y las condiciones experimentales.</span></div>
         </div>
         """,
@@ -666,12 +838,10 @@ if selected == "Inicio":
         tool_card("⛰️", "Análisis de picos", "Separa matemáticamente bandas superpuestas.", "leer centros, anchos, áreas y residuos")
     with row_1[2]:
         tool_card("⚡", "Band gap óptico", "Explora Eg mediante modelos de Tauc.", "evitar confundir una hipótesis con una conclusión")
-    row_2 = st.columns(3)
+    row_2 = st.columns(2)
     with row_2[0]:
-        tool_card("🎨", "CIE 1931", "Ubica el color de una emisión en el diagrama xy.", "interpretar cromaticidad, longitud y pureza")
+        tool_card("🎨", "Color y colorimetría", "Integra CIE 1931, emisiones y color de objetos en una sola ruta.", "escoger el cálculo según el tipo de medición")
     with row_2[1]:
-        tool_card("🌈", "Colorimetría", "Describe objetos y emisiones bajo condiciones declaradas.", "escoger iluminante, observador y espacio de color")
-    with row_2[2]:
         tool_card("💡", "Rendimiento cuántico", "Compara una solución con una referencia conocida.", "reconocer las condiciones del método relativo")
 
     st.subheader("Ruta recomendada")
@@ -953,181 +1123,127 @@ elif selected == "Band gap óptico":
     )
 
 
-elif selected == "CIE 1931":
+elif selected == "Color y colorimetría":
     page_header(
-        "CIE 1931",
-        "Coordenadas de cromaticidad para espectros de emisión mediante el observador colorimétrico estándar CIE 1931 de 2°.",
+        "Color y colorimetría",
+        "Una sola ruta para interpretar emisiones, reflectancia y transmitancia sin mezclar condiciones experimentales.",
     )
     plain_language(
-        "Convierte la forma completa de un espectro de emisión en un punto x,y que resume su cromaticidad, es decir, su color sin expresar cuánto ilumina."
+        "Primero identifica qué mediste. Una emisión produce su propia luz y puede ubicarse directamente en CIE 1931; "
+        "un objeto necesita además un iluminante y un observador para describir su color."
     )
     learning_goals(
-        "relacionar el espectro con X, Y, Z y las coordenadas x,y",
-        "distinguir cromaticidad de intensidad",
-        "reconocer por qué la cobertura espectral importa",
+        "elegir la ruta adecuada para emisión, reflectancia o transmitancia",
+        "relacionar el espectro con XYZ, xy, Lab y otros espacios derivados",
+        "reconocer cuándo la cobertura o las condiciones impiden comparar resultados",
     )
-    st.subheader("Del espectro al punto de color")
-    step_flow(
-        ("Espectro", "Usa intensidades medidas en el visible."),
-        ("Observador", "Combina la señal con x̄, ȳ y z̄."),
-        ("Integración", "Obtén los valores relativos X, Y y Z."),
-        ("Cromaticidad", "Normaliza y ubica el punto x,y."),
-    )
+    st.subheader("Dos rutas, un mismo fundamento")
     concept_figure(
-        "Imagen guía · cómo un espectro se convierte en un punto x,y",
+        "Imagen guía · el tipo de medición determina la ruta colorimétrica",
         """
-        <rect x="25" y="35" width="235" height="205" rx="16" class="v-box"/>
-        <text x="143" y="65" text-anchor="middle" class="v-label">Espectro de emisión S(λ)</text>
-        <line x1="55" y1="202" x2="230" y2="202" class="v-axis"/><line x1="55" y1="202" x2="55" y2="90" class="v-axis"/>
-        <path d="M55 200 C93 199 111 189 129 149 C146 110 161 82 184 104 C207 126 207 181 230 199" fill="none" stroke="#9e2f2b" stroke-width="4"/>
-        <text x="143" y="223" text-anchor="middle" class="v-tiny">380 ← longitud de onda → 780 nm</text>
-        <path d="M270 138 H322" class="v-arrow"/><path d="M314 130 L325 138 L314 146" class="v-arrow"/>
-        <rect x="327" y="35" width="230" height="205" rx="16" class="v-blue"/>
-        <text x="442" y="65" text-anchor="middle" class="v-label">Observador CIE 1931</text>
-        <path d="M354 189 C382 180 391 112 417 102 C444 91 451 166 480 184" fill="none" stroke="#d64545" stroke-width="3"/>
-        <path d="M354 192 C389 186 411 156 434 112 C457 68 481 79 500 133 C516 176 526 188 535 191" fill="none" stroke="#2e8b57" stroke-width="3"/>
-        <path d="M354 191 C368 182 376 87 398 77 C419 67 429 156 455 187" fill="none" stroke="#4067d8" stroke-width="3"/>
-        <text x="376" y="218" class="v-tiny">x̄</text><text x="430" y="218" class="v-tiny">ȳ</text><text x="482" y="218" class="v-tiny">z̄</text>
-        <path d="M567 138 H619" class="v-arrow"/><path d="M611 130 L622 138 L611 146" class="v-arrow"/>
-        <rect x="624" y="35" width="251" height="205" rx="16" class="v-green"/>
-        <text x="750" y="65" text-anchor="middle" class="v-label">Diagrama de cromaticidad</text>
-        <line x1="656" y1="205" x2="846" y2="205" class="v-axis"/><line x1="656" y1="205" x2="656" y2="82" class="v-axis"/>
-        <path d="M677 198 C658 170 660 104 687 83 C726 54 797 108 829 154 L677 198 Z" fill="#edf3ff" stroke="#17212b" stroke-width="2"/>
-        <circle cx="754" cy="132" r="8" fill="#9e2f2b"/><line x1="754" y1="132" x2="814" y2="104" stroke="#9e2f2b" stroke-dasharray="5 4"/>
-        <text x="817" y="102" class="v-small">(x,y)</text><text x="750" y="224" text-anchor="middle" class="v-tiny">cromaticidad, no brillo</text>
+        <rect x="24" y="24" width="852" height="112" rx="18" fill="#f7fbfd" stroke="#c9dce5" stroke-width="1.5"/>
+        <rect x="24" y="158" width="852" height="112" rx="18" fill="#fbfaf5" stroke="#e1d8ba" stroke-width="1.5"/>
+
+        <rect x="48" y="48" width="150" height="64" rx="12" class="v-blue"/>
+        <text x="123" y="75" text-anchor="middle" class="v-label">Emisión S(λ)</text>
+        <text x="123" y="96" text-anchor="middle" class="v-tiny">la muestra emite luz</text>
+        <path d="M208 80 H280" class="v-arrow"/><path d="M270 72 L282 80 L270 88" class="v-arrow"/>
+        <rect x="288" y="48" width="170" height="64" rx="12" class="v-violet"/>
+        <text x="373" y="75" text-anchor="middle" class="v-label">Observador CIE</text>
+        <text x="373" y="96" text-anchor="middle" class="v-tiny">2° o 10°</text>
+        <path d="M468 80 H540" class="v-arrow"/><path d="M530 72 L542 80 L530 88" class="v-arrow"/>
+        <rect x="548" y="48" width="136" height="64" rx="12" class="v-green"/>
+        <text x="616" y="75" text-anchor="middle" class="v-label">XYZ relativo</text>
+        <text x="616" y="96" text-anchor="middle" class="v-tiny">integración espectral</text>
+        <path d="M694 80 H746" class="v-arrow"/><path d="M736 72 L748 80 L736 88" class="v-arrow"/>
+        <rect x="754" y="48" width="98" height="64" rx="12" fill="#fff" stroke="#9e2f2b" stroke-width="2"/>
+        <text x="803" y="75" text-anchor="middle" class="v-label">xy · u′v′</text>
+        <text x="803" y="96" text-anchor="middle" class="v-tiny">cromaticidad</text>
+
+        <rect x="48" y="182" width="126" height="64" rx="12" class="v-warn"/>
+        <text x="111" y="209" text-anchor="middle" class="v-label">Iluminante</text>
+        <text x="111" y="230" text-anchor="middle" class="v-tiny">A · D50 · D65</text>
+        <path d="M184 214 H236" class="v-arrow"/><path d="M226 206 L238 214 L226 222" class="v-arrow"/>
+        <rect x="244" y="182" width="170" height="64" rx="12" class="v-blue"/>
+        <text x="329" y="209" text-anchor="middle" class="v-label">R(λ) o T(λ)</text>
+        <text x="329" y="230" text-anchor="middle" class="v-tiny">respuesta de la muestra</text>
+        <path d="M424 214 H476" class="v-arrow"/><path d="M466 206 L478 214 L466 222" class="v-arrow"/>
+        <rect x="484" y="182" width="146" height="64" rx="12" class="v-violet"/>
+        <text x="557" y="209" text-anchor="middle" class="v-label">Observador</text>
+        <text x="557" y="230" text-anchor="middle" class="v-tiny">2° o 10°</text>
+        <path d="M640 214 H692" class="v-arrow"/><path d="M682 206 L694 214 L682 222" class="v-arrow"/>
+        <rect x="700" y="182" width="152" height="64" rx="12" class="v-green"/>
+        <text x="776" y="209" text-anchor="middle" class="v-label">XYZ · Lab · LCh</text>
+        <text x="776" y="230" text-anchor="middle" class="v-tiny">color bajo condiciones</text>
         """,
-        "El punto depende de toda la forma espectral ponderada por el observador estándar. Al normalizar X, Y y Z se conserva la cromaticidad, pero se elimina la información de intensidad absoluta.",
-        "0 0 900 275",
+        "La ruta superior corresponde a fuentes o emisiones. La inferior corresponde a objetos y exige declarar el iluminante. "
+        "En ambos casos el observador estándar y la cobertura espectral forman parte del resultado.",
+        "0 0 900 294",
     )
     reading_guide(
-        "Una emisión con cobertura visible suficiente e intensidades no negativas.",
-        "Integra el espectro con x̄, ȳ y z̄ para calcular X, Y, Z y normalizarlos a x,y.",
-        "Puedes describir cromaticidad y, si la geometría lo permite, longitud dominante y pureza; no brillo absoluto.",
+        "Espectro identificado como emisión, reflectancia o transmitancia, con unidades y cobertura real.",
+        "Selecciona la ruta, combina las distribuciones necesarias e integra los valores triestímulo XYZ.",
+        "Obtienes cromaticidad o color bajo condiciones declaradas; no una propiedad universal independiente del experimento.",
     )
-    cie_demo()
-    method(
-        "El espectro de emisión se integra con las funciones de igualación de color x̄(λ), ȳ(λ) y z̄(λ) para obtener "
-        "los valores triestímulo relativos X, Y y Z. Después se calculan x = X/(X+Y+Z) e y = Y/(X+Y+Z)."
-    )
-    st.latex(r"X=\int S(\lambda)\,\bar{x}(\lambda)\,d\lambda\qquad Y=\int S(\lambda)\,\bar{y}(\lambda)\,d\lambda\qquad Z=\int S(\lambda)\,\bar{z}(\lambda)\,d\lambda")
-    st.latex(r"x=\frac{X}{X+Y+Z}\qquad y=\frac{Y}{X+Y+Z}")
-    st.subheader("Cobertura y muestreo")
-    st.markdown(
-        "La recomendación normalizada para valores triestímulo usa 360–830 nm con paso de 1 nm. CIE también define "
-        "métodos abreviados, incluidos intervalos de 380–780 nm y pasos de hasta 5 nm, cuando son apropiados y se ha "
-        "revisado su efecto sobre el resultado. SpectraLab no extrapola las funciones CIE fuera de su dominio."
-    )
-    caution(
-        "No deben inventarse intensidades en longitudes de onda no medidas. Un espectro incompleto puede sesgar x, y, "
-        "la longitud dominante y la pureza, especialmente si falta una banda o un extremo significativo."
-    )
-    guided_example(
-        "Dos espectros con el mismo color aparente",
-        "Si tienen formas relativas semejantes, uno puede ser diez veces más intenso y aun así producir coordenadas x,y casi iguales. La diferencia de brillo no queda representada por x,y.",
-    )
-    st.subheader("Longitud dominante y pureza")
-    st.markdown(
-        "Se calculan geométricamente desde el punto blanco hacia la cromaticidad de la muestra. Solo se informan si "
-        "la muestra y el punto blanco están dentro del locus espectral cerrado por la línea púrpura. Los puntos "
-        "físicamente imposibles se rechazan y la pureza se limita al intervalo 0–100 %."
-    )
-    st.subheader("Qué no representa")
-    st.markdown(
-        "Las coordenadas x,y describen cromaticidad, no intensidad luminosa absoluta. Dos espectros con potencias "
-        "distintas pueden producir coordenadas semejantes. El color sRGB en pantalla es únicamente una representación aproximada."
-    )
+    color_science_demo()
 
-
-elif selected == "Colorimetría":
-    page_header(
-        "Colorimetría",
-        "Análisis de reflectancia, transmitancia y emisión con condiciones colorimétricas declaradas.",
+    emission_tab, object_tab, quality_tab = st.tabs(
+        ["Emisión y CIE 1931", "Color de objetos", "Cobertura y comparación"]
     )
-    plain_language(
-        "Para un objeto, el color depende tanto de la muestra como de la luz que la ilumina y del observador estándar elegido. Para una emisión, la luz proviene de la propia muestra."
-    )
-    learning_goals(
-        "escoger el modo correcto para reflectancia, transmitancia o emisión",
-        "entender el papel del iluminante y del observador",
-        "diferenciar un cálculo completo de una estimación aproximada",
-    )
-    st.subheader("Tres preguntas antes de calcular")
-    step_flow(
-        ("¿Qué medí?", "Reflectancia, transmitancia o emisión."),
-        ("¿Con qué unidades?", "Porcentaje, fracción o intensidad relativa."),
-        ("¿Bajo qué condiciones?", "Iluminante y observador cuando aplican."),
-        ("¿Qué cobertura?", "Completa 380–780 o aproximada 400–700 nm."),
-    )
-    concept_figure(
-        "Imagen guía · por qué el color de un objeto necesita tres elementos",
-        """
-        <circle cx="115" cy="132" r="70" fill="#fff4c9" stroke="#bc7b00" stroke-width="2"/>
-        <circle cx="115" cy="132" r="28" fill="#ffd34d"/><path d="M115 47 V21 M115 243 V217 M30 132 H4 M226 132 H200 M55 72 L36 53 M194 211 L175 192 M55 192 L36 211 M194 53 L175 72" stroke="#bc7b00" stroke-width="5"/>
-        <text x="115" y="266" text-anchor="middle" class="v-label">Iluminante</text>
-        <text x="115" y="286" text-anchor="middle" class="v-tiny">A, D50 o D65</text>
-        <path d="M203 132 H298" class="v-arrow"/><path d="M290 124 L301 132 L290 140" class="v-arrow"/>
-        <rect x="303" y="61" width="190" height="142" rx="22" fill="#77b8d2" stroke="#256b8a" stroke-width="3"/>
-        <path d="M328 171 C355 134 383 151 407 112 C433 70 461 103 477 81" fill="none" stroke="#fff" stroke-width="5" opacity=".8"/>
-        <text x="398" y="231" text-anchor="middle" class="v-label">Muestra</text>
-        <text x="398" y="252" text-anchor="middle" class="v-tiny">R(λ) o T(λ)</text>
-        <path d="M500 132 H592" class="v-arrow"/><path d="M584 124 L595 132 L584 140" class="v-arrow"/>
-        <path d="M630 132 C650 92 703 92 723 132 C703 172 650 172 630 132 Z" fill="#fff" stroke="#17212b" stroke-width="3"/>
-        <circle cx="677" cy="132" r="19" fill="#6453a5"/><circle cx="677" cy="132" r="8" fill="#17212b"/>
-        <text x="677" y="206" text-anchor="middle" class="v-label">Observador</text>
-        <text x="677" y="227" text-anchor="middle" class="v-tiny">2° o 10°</text>
-        <path d="M733 132 H786" class="v-arrow"/><path d="M778 124 L789 132 L778 140" class="v-arrow"/>
-        <rect x="791" y="88" width="88" height="88" rx="16" class="v-green"/>
-        <text x="835" y="123" text-anchor="middle" class="v-label">XYZ</text><text x="835" y="148" text-anchor="middle" class="v-small">Lab · xy</text>
-        """,
-        "En reflectancia o transmitancia, el color calculado no pertenece únicamente a la muestra: también depende del iluminante y del observador. En emisión se omite el iluminante porque la muestra produce su propia distribución espectral.",
-        "0 0 900 305",
-    )
-    reading_guide(
-        "R(λ), T(λ) o emisión, con unidades, cobertura, iluminante y observador cuando correspondan.",
-        "Combina las distribuciones espectrales, integra XYZ y convierte a espacios derivados.",
-        "Obtienes valores comparables solo si mantienes las mismas condiciones colorimétricas.",
-    )
-    colorimetry_demo()
-    st.subheader("Configuración según la medición")
-    st.markdown(
-        """
-        <table class="scope-table">
-          <thead><tr><th>Entrada</th><th>Condición necesaria</th><th>Resultados principales</th></tr></thead>
-          <tbody>
-            <tr><td>Reflectancia</td><td>Iluminante A, D50 o D65; observador 2° o 10°</td><td>XYZ, Lab, LCh, xy, u′v′, ΔE00 y sRGB aproximado</td></tr>
-            <tr><td>Transmitancia</td><td>Iluminante A, D50 o D65; observador 2° o 10°</td><td>XYZ, Lab, LCh, xy, u′v′, ΔE00 y sRGB aproximado</td></tr>
-            <tr><td>Emisión</td><td>Intensidad espectral relativa; no usa iluminante externo</td><td>XYZ relativo, xy, u′v′ y CCT/Duv cuando son aplicables</td></tr>
-          </tbody>
-        </table>
-        """,
-        unsafe_allow_html=True,
-    )
-    method(
-        "Los objetos reflectantes o transmisivos se evalúan bajo un iluminante y un observador especificados. "
-        "La emisión se trata como una distribución espectral propia y no se multiplica por un iluminante externo."
-    )
-    st.subheader("Cobertura espectral")
-    st.markdown(
-        """
-        - **Cálculo completo del programa:** datos medidos entre 380 y 780 nm.
-        - **Estimación aproximada:** cobertura continua mínima entre 400 y 700 nm.
-        - En reflectancia o transmitancia, la estimación prolonga los valores de borde hasta 380 y 780 nm.
-        - En emisión, la estimación supone intensidad cero fuera del intervalo medido.
-        """
-    )
-    caution(
-        "La extensión de bordes es una hipótesis numérica, no una medición. El resultado aproximado debe reportar "
-        "el intervalo real, el porcentaje de cobertura y el método aplicado."
-    )
-    guided_example(
-        "El mismo sólido bajo D50 y D65",
-        "La reflectancia medida no cambia, pero los valores XYZ y Lab sí pueden cambiar porque el cálculo representa cómo se observaría el objeto bajo dos iluminantes distintos.",
-    )
-    st.subheader("Comparación y temperatura correlacionada")
-    st.markdown(
-        "ΔE00 compara muestras bajo las mismas condiciones colorimétricas y respecto de una referencia seleccionada. "
-        "La CCT solo se informa para emisiones suficientemente próximas al locus de Planck; no describe cualquier color."
-    )
+    with emission_tab:
+        st.subheader("De un espectro de emisión a CIE 1931")
+        method(
+            "La emisión se integra con las funciones de igualación de color del observador seleccionado para obtener "
+            "X, Y y Z relativos. Después se normalizan para calcular x e y. No se aplica un iluminante externo."
+        )
+        st.latex(r"X=\int S(\lambda)\,\bar{x}(\lambda)\,d\lambda\quad Y=\int S(\lambda)\,\bar{y}(\lambda)\,d\lambda\quad Z=\int S(\lambda)\,\bar{z}(\lambda)\,d\lambda")
+        st.latex(r"x=\frac{X}{X+Y+Z}\qquad y=\frac{Y}{X+Y+Z}")
+        st.markdown(
+            "Las coordenadas **x,y describen cromaticidad, no intensidad luminosa absoluta**. La longitud dominante "
+            "y la pureza se calculan geométricamente solo cuando el punto blanco y la muestra están dentro del locus físico."
+        )
+        caution(
+            "Un color sRGB mostrado en pantalla es una representación aproximada. No sustituye el espectro ni garantiza "
+            "que un monitor reproduzca el color medido."
+        )
+    with object_tab:
+        st.subheader("Reflectancia y transmitancia")
+        method(
+            "El color de un objeto se calcula combinando su reflectancia o transmitancia con la distribución del "
+            "iluminante y las funciones del observador. Cambiar cualquiera de esas condiciones puede cambiar XYZ y Lab."
+        )
+        st.markdown(
+            """
+            <table class="scope-table">
+              <thead><tr><th>Entrada</th><th>Debe declararse</th><th>Resultados</th></tr></thead>
+              <tbody>
+                <tr><td>Reflectancia</td><td>Iluminante, observador, geometría y escala</td><td>XYZ, Lab, LCh, xy, u′v′, ΔE00</td></tr>
+                <tr><td>Transmitancia</td><td>Iluminante, observador, geometría y escala</td><td>XYZ, Lab, LCh, xy, u′v′, ΔE00</td></tr>
+                <tr><td>Emisión</td><td>Observador y distribución espectral</td><td>XYZ relativo, xy, u′v′; CCT/Duv si aplica</td></tr>
+              </tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
+        guided_example(
+            "El mismo sólido bajo D50 y D65",
+            "La reflectancia medida puede ser la misma, pero XYZ y Lab cambian porque representan la apariencia bajo iluminantes diferentes.",
+        )
+    with quality_tab:
+        st.subheader("Cobertura espectral y comparabilidad")
+        st.markdown(
+            """
+            - **Cálculo completo del programa:** datos medidos continuamente entre 380 y 780 nm.
+            - **Estimación aproximada:** cobertura mínima continua entre 400 y 700 nm.
+            - Para objetos, la aproximación prolonga los valores de borde; para emisión supone intensidad cero fuera del intervalo.
+            - ΔE00 solo debe comparar muestras calculadas con el mismo iluminante, observador y condiciones experimentales.
+            - La CCT se informa únicamente para emisiones suficientemente próximas al locus de Planck.
+            """
+        )
+        caution(
+            "Extender bordes o suponer intensidad cero no crea datos medidos. El informe debe conservar el intervalo real, "
+            "el diagnóstico y la hipótesis aplicada."
+        )
 
 
 elif selected == "Rendimiento cuántico":
@@ -1151,27 +1267,43 @@ elif selected == "Rendimiento cuántico":
         ("Corrección", "Aplica fracción absorbida e índices n²."),
     )
     concept_figure(
-        "Imagen guía · la muestra se compara con una referencia",
+        "Imagen guía · diseño experimental del método relativo",
         """
-        <rect x="35" y="41" width="290" height="205" rx="17" class="v-blue"/>
-        <text x="180" y="72" text-anchor="middle" class="v-label">Referencia conocida</text>
-        <rect x="72" y="92" width="72" height="100" rx="8" fill="#d9f0ff" stroke="#256b8a" stroke-width="2"/>
-        <path d="M74 150 H142 V190 H74 Z" fill="#78c8ef" opacity=".7"/>
-        <path d="M170 190 C192 188 199 168 211 137 C222 108 238 106 250 136 C264 171 273 187 298 190" fill="none" stroke="#256b8a" stroke-width="4"/>
-        <text x="108" y="215" text-anchor="middle" class="v-tiny">Aref</text><text x="237" y="215" text-anchor="middle" class="v-tiny">Iref integrada</text>
-        <rect x="575" y="41" width="290" height="205" rx="17" class="v-green"/>
-        <text x="720" y="72" text-anchor="middle" class="v-label">Muestra problema</text>
-        <rect x="612" y="92" width="72" height="100" rx="8" fill="#ecdcff" stroke="#6453a5" stroke-width="2"/>
-        <path d="M614 163 H682 V190 H614 Z" fill="#b899df" opacity=".8"/>
-        <path d="M710 190 C732 188 739 176 751 151 C763 126 780 122 792 149 C806 177 814 188 838 190" fill="none" stroke="#6453a5" stroke-width="4"/>
-        <text x="648" y="215" text-anchor="middle" class="v-tiny">Ax</text><text x="778" y="215" text-anchor="middle" class="v-tiny">Ix integrada</text>
-        <path d="M333 140 H420" class="v-arrow"/><path d="M567 140 H480" class="v-arrow"/>
-        <circle cx="450" cy="140" r="62" fill="#fff" stroke="#9e2f2b" stroke-width="3"/>
-        <text x="450" y="126" text-anchor="middle" class="v-label">Comparación</text><text x="450" y="149" text-anchor="middle" class="v-small">área · absorción</text><text x="450" y="170" text-anchor="middle" class="v-small">índice n²</text>
-        <text x="450" y="277" text-anchor="middle" class="v-label">Φx depende de Φref y de condiciones equivalentes</text>
+        <rect x="24" y="28" width="852" height="224" rx="18" fill="#fafcfd" stroke="#d4e0e6" stroke-width="1.5"/>
+        <rect x="52" y="88" width="120" height="104" rx="14" class="v-box"/>
+        <circle cx="87" cy="124" r="15" fill="#fff2bd" stroke="#bc7b00" stroke-width="2"/>
+        <path d="M105 124 H145" stroke="#bc7b00" stroke-width="3"/><path d="M135 116 L147 124 L135 132" fill="none" stroke="#bc7b00" stroke-width="3"/>
+        <text x="112" y="165" text-anchor="middle" class="v-label">Excitación</text>
+        <text x="112" y="184" text-anchor="middle" class="v-tiny">misma λ y potencia</text>
+
+        <path d="M182 140 H226" class="v-arrow"/><path d="M216 132 L228 140 L216 148" class="v-arrow"/>
+        <rect x="236" y="48" width="204" height="82" rx="14" class="v-blue"/>
+        <text x="338" y="73" text-anchor="middle" class="v-label">Referencia</text>
+        <text x="256" y="99" class="v-small">Aref</text><line x1="298" y1="95" x2="330" y2="95" stroke="#256b8a" stroke-width="5"/>
+        <text x="346" y="99" class="v-small">Iref</text><path d="M382 102 C395 101 399 79 412 79 C425 79 428 101 436 102" fill="none" stroke="#256b8a" stroke-width="3"/>
+        <rect x="236" y="150" width="204" height="82" rx="14" class="v-violet"/>
+        <text x="338" y="175" text-anchor="middle" class="v-label">Muestra</text>
+        <text x="256" y="201" class="v-small">Ax</text><line x1="298" y1="197" x2="318" y2="197" stroke="#6453a5" stroke-width="5"/>
+        <text x="346" y="201" class="v-small">Ix</text><path d="M382 204 C395 203 399 186 412 186 C425 186 428 203 436 204" fill="none" stroke="#6453a5" stroke-width="3"/>
+
+        <path d="M450 89 H506" class="v-arrow"/><path d="M496 81 L508 89 L496 97" class="v-arrow"/>
+        <path d="M450 191 H506" class="v-arrow"/><path d="M496 183 L508 191 L496 199" class="v-arrow"/>
+        <rect x="516" y="74" width="148" height="132" rx="16" class="v-green"/>
+        <text x="590" y="104" text-anchor="middle" class="v-label">Correcciones</text>
+        <line x1="542" y1="119" x2="638" y2="119" stroke="#bdd9ca" stroke-width="1"/>
+        <text x="590" y="143" text-anchor="middle" class="v-small">área integrada</text>
+        <text x="590" y="166" text-anchor="middle" class="v-small">fracción absorbida</text>
+        <text x="590" y="189" text-anchor="middle" class="v-small">índice n²</text>
+
+        <path d="M674 140 H724" class="v-arrow"/><path d="M714 132 L726 140 L714 148" class="v-arrow"/>
+        <rect x="734" y="88" width="118" height="104" rx="16" fill="#fff" stroke="#9e2f2b" stroke-width="2"/>
+        <text x="793" y="126" text-anchor="middle" class="v-title">Φx</text>
+        <text x="793" y="151" text-anchor="middle" class="v-small">resultado relativo</text>
+        <text x="793" y="174" text-anchor="middle" class="v-tiny">solo para solución</text>
         """,
-        "El área de emisión no se interpreta sola. Se corrige por cuánto absorbió cada solución y por el índice de refracción; por eso muestra y referencia deben medirse con la misma excitación y configuración.",
-        "0 0 900 300",
+        "Referencia y muestra se miden con la misma excitación y configuración. El área emitida se corrige por la "
+        "fracción absorbida y el índice de refracción antes de compararla con el Φ conocido de la referencia.",
+        "0 0 900 280",
     )
     reading_guide(
         "Absorbancia y emisión integrada de muestra y referencia, Φref e índices de refracción.",
@@ -1356,7 +1488,16 @@ elif selected == "Historial de cambios":
         "Resumen de las modificaciones que afectan la interpretación científica y la reproducibilidad.",
         "Versiones",
     )
-    with st.expander("Beta 1.6 — reproducibilidad y diagnósticos", expanded=True):
+    with st.expander("Beta 1.7 — rediseño pedagógico e integración del color", expanded=True):
+        st.markdown(
+            """
+            - CIE 1931 y Colorimetría se integran en el módulo **Color y colorimetría**.
+            - Nueva ruta visual que separa emisiones de reflectancia y transmitancia.
+            - Demostraciones interactivas reorganizadas con gráficos y resultados más claros.
+            - Nueva guía experimental y análisis de sensibilidad para rendimiento cuántico relativo.
+            """
+        )
+    with st.expander("Beta 1.6 — reproducibilidad y diagnósticos"):
         st.markdown(
             """
             - Paquetes reproducibles por módulo con resultados, datos procesados, metadatos e informe.
@@ -1396,10 +1537,10 @@ elif selected == "Historial de cambios":
 
 
 st.markdown(
-    """
+    f"""
     <div class="institutional">
       <span class="label">SpectraLab Toolkit</span><br>
-      <span class="small">Documentación correspondiente a Beta 1.6.</span>
+      <span class="small">Documentación correspondiente a {APP_VERSION}.</span>
     </div>
     """,
     unsafe_allow_html=True,
