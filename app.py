@@ -433,7 +433,7 @@ def viewer_demo() -> None:
         if normalization == "Máximo = 1":
             processed = processed / max(float(np.max(processed)), 1e-12)
         elif normalization == "Área = 1":
-            processed = processed / max(float(np.trapz(processed, wavelengths)), 1e-12)
+            processed = processed / max(float(np.trapezoid(processed, wavelengths)), 1e-12)
 
         fig = go.Figure()
         if show_raw:
@@ -526,9 +526,9 @@ def cie_demo() -> None:
         y_bar = 0.821 * np.exp(-0.5 * ((wavelengths - 568.8) / 46.9) ** 2) + 0.286 * np.exp(-0.5 * ((wavelengths - 530.9) / 16.3) ** 2)
         z_bar = 1.217 * np.exp(-0.5 * ((wavelengths - 437.0) / 11.8) ** 2) + 0.681 * np.exp(-0.5 * ((wavelengths - 459.0) / 26.0) ** 2)
         xyz = np.array([
-            np.trapz(emission * x_bar, wavelengths),
-            np.trapz(emission * y_bar, wavelengths),
-            np.trapz(emission * z_bar, wavelengths),
+            np.trapezoid(emission * x_bar, wavelengths),
+            np.trapezoid(emission * y_bar, wavelengths),
+            np.trapezoid(emission * z_bar, wavelengths),
         ])
         chromaticity = xyz[:2] / max(float(np.sum(xyz)), 1e-12)
 
