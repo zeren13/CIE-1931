@@ -1,6 +1,8 @@
 import base64
 from pathlib import Path
 
+import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -205,6 +207,15 @@ st.markdown(
     }
     .reading-box b { display:block; color:var(--blue); margin-bottom:.3rem; }
     .reading-box span { color:var(--muted); font-size:.88rem; line-height:1.48; }
+    .demo-note {
+        border: 1px dashed #98b9c8;
+        background: #f4fafc;
+        border-radius: 10px;
+        color: #3f5967;
+        font-size: .88rem;
+        padding: .72rem .85rem;
+        margin: .2rem 0 .9rem;
+    }
     .question-strip {
         display:grid;
         grid-template-columns:repeat(3,minmax(0,1fr));
@@ -379,6 +390,228 @@ def reading_guide(input_text: str, process_text: str, result_text: str) -> None:
     )
 
 
+def demo_note(text: str) -> None:
+    st.markdown(
+        f'<div class="demo-note"><b>Simulación didáctica.</b> {text} No debe usarse como resultado experimental.</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def style_demo_figure(fig: go.Figure, x_title: str, y_title: str, height: int = 350) -> None:
+    fig.update_layout(
+        template="plotly_white",
+        height=height,
+        margin=dict(l=35, r=20, t=30, b=40),
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        hovermode="x unified",
+    )
+
+
+def viewer_demo() -> None:
+    with st.expander("▶ Prueba interactiva · procesamiento de un espectro"):
+        demo_note("La curva se genera con una semilla fija para que puedas repetir la comparación.")
+        controls = st.columns(3)
+        window = controls[0].slider("Ventana de suavizado", 1, 25, 7, 2, key="demo_viewer_window")
+        normalization = controls[1].selectbox(
+            "Normalización", ["Ninguna", "Máximo = 1", "Área = 1"], key="demo_viewer_norm"
+        )
+        show_raw = controls[2].checkbox("Mostrar medición original", True, key="demo_viewer_raw")
+
+        wavelengths = np.linspace(400.0, 700.0, 301)
+        clean = np.exp(-0.5 * ((wavelengths - 535.0) / 24.0) ** 2)
+        clean += 0.42 * np.exp(-0.5 * ((wavelengths - 610.0) / 36.0) ** 2)
+        rng = np.random.default_rng(1931)
+        measured = np.clip(clean + rng.normal(0.0, 0.035, wavelengths.size), 0.0, None)
+        if window > 1:
+            padded = np.pad(measured, window // 2, mode="edge")
+            processed = np.convolve(padded, np.ones(window) / window, mode="valid")
+        else:
+            processed = measured.copy()
+
+        if normalization == "Máximo = 1":
+            processed = processed / max(float(np.max(processed)), 1e-12)
+        elif normalization == "Área = 1":
+            processed = processed / max(float(np.trapz(processed, wavelengths)), 1e-12)
+
+        fig = go.Figure()
+        if show_raw:
+            fig.add_trace(go.Scatter(x=wavelengths, y=measured, name="Medición simulada", line=dict(color="#9e2f2b", width=1.4)))
+        fig.add_trace(go.Scatter(x=wavelengths, y=processed, name="Resultado procesado", line=dict(color="#256b8a", width=3)))
+        style_demo_figure(fig, "Longitud de onda (nm)", "Señal")
+        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        st.caption("Observa si una ventana grande elimina ruido o también borra el hombro cercano a 610 nm.")
+
+
+def peaks_demo() -> None:
+    with st.expander("▶ Prueba interactiva · bandas superpuestas"):
+        demo_note("Las componentes son funciones matemáticas conocidas, no especies químicas identificadas.")
+        controls = st.columns(2)
+        separation = controls[0].slider("Separación entre centros (nm)", 10, 110, 48, key="demo_peaks_sep")
+        show_components = controls[1].checkbox("Mostrar componentes", True, key="demo_peaks_components")
+        wavelengths = np.linspace(430.0, 650.0, 400)
+        center_1, center_2 = 540.0 - separation / 2, 540.0 + separation / 2
+        component_1 = np.exp(-0.5 * ((wavelengths - center_1) / 24.0) ** 2)
+        component_2 = 0.78 * np.exp(-0.5 * ((wavelengths - center_2) / 31.0) ** 2)
+        total = component_1 + component_2 + 0.04
+        fig = go.Figure()
+        if show_components:
+            fig.add_trace(go.Scatter(x=wavelengths, y=component_1 + 0.04, name="Componente 1", line=dict(color="#256b8a", dash="dash")))
+            fig.add_trace(go.Scatter(x=wavelengths, y=component_2 + 0.04, name="Componente 2", line=dict(color="#9e2f2b", dash="dash")))
+        fig.add_trace(go.Scatter(x=wavelengths, y=total, name="Suma observada", line=dict(color="#17212b", width=4)))
+        style_demo_figure(fig, "Longitud de onda (nm)", "Intensidad relativa")
+        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        if separation < 45:
+            st.warning("Los centros están muy próximos: la banda puede parecer un único máximo y el ajuste será más ambiguo.")
+        else:
+            st.info("La separación permite distinguir mejor el hombro, pero todavía no identifica qué origina cada componente.")
+
+
+def band_gap_demo() -> None:
+    with st.expander("▶ Prueba interactiva · hipótesis de Tauc"):
+        demo_note("El espectro simulado fue construido como una transición directa permitida con Eg = 2,20 eV.")
+        powers = {
+            "Directa permitida": 2.0,
+            "Indirecta permitida": 0.5,
+            "Directa prohibida": 2.0 / 3.0,
+            "Indirecta prohibida": 1.0 / 3.0,
+        }
+        controls = st.columns(2)
+        hypothesis = controls[0].selectbox("Hipótesis evaluada", list(powers), key="demo_tauc_hypothesis")
+        fit_range = controls[1].slider(
+            "Intervalo de ajuste (eV)", 2.25, 3.50, (2.40, 3.00), 0.05, key="demo_tauc_range"
+        )
+        energy = np.linspace(1.35, 4.0, 500)
+        true_eg = 2.20
+        alpha = np.sqrt(np.clip(energy - true_eg, 0.0, None)) / energy
+        transformed = np.power(np.clip(alpha * energy, 0.0, None), powers[hypothesis])
+        mask = (energy >= fit_range[0]) & (energy <= fit_range[1])
+        slope, intercept = np.polyfit(energy[mask], transformed[mask], 1)
+        fitted = slope * energy[mask] + intercept
+        estimated_eg = -intercept / slope if slope > 0 else np.nan
+        residual = transformed[mask] - fitted
+        denominator = np.sum((transformed[mask] - np.mean(transformed[mask])) ** 2)
+        r_squared = 1.0 - np.sum(residual**2) / denominator if denominator > 0 else np.nan
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=energy, y=transformed, name=f"Transformación: {hypothesis}", line=dict(color="#256b8a", width=3)))
+        fit_x = np.linspace(max(1.35, estimated_eg), fit_range[1], 120)
+        fig.add_trace(go.Scatter(x=fit_x, y=slope * fit_x + intercept, name="Recta extrapolada", line=dict(color="#9e2f2b", dash="dash", width=3)))
+        if np.isfinite(estimated_eg):
+            fig.add_vline(x=estimated_eg, line_dash="dot", line_color="#257052")
+        style_demo_figure(fig, "Energía hν (eV)", f"(αhν)^{powers[hypothesis]:.3g}")
+        st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+        metrics = st.columns(3)
+        metrics[0].metric("Eg simulado real", "2,20 eV")
+        metrics[1].metric("Eg extrapolado", f"{estimated_eg:.3f} eV")
+        metrics[2].metric("R² del intervalo", f"{r_squared:.5f}")
+        st.caption("Cambia la hipótesis o el intervalo: un R² alto no convierte automáticamente esa hipótesis en la correcta.")
+
+
+def cie_demo() -> None:
+    with st.expander("▶ Prueba interactiva · del espectro al punto CIE"):
+        demo_note("Las funciones de igualación usadas aquí son aproximaciones analíticas para visualizar la relación, no tablas normativas.")
+        controls = st.columns(2)
+        center = controls[0].slider("Centro de emisión (nm)", 420, 680, 540, 5, key="demo_cie_center")
+        fwhm = controls[1].slider("FWHM de la banda (nm)", 10, 140, 55, 5, key="demo_cie_fwhm")
+        wavelengths = np.arange(380.0, 781.0, 1.0)
+        sigma = fwhm / 2.35482
+        emission = np.exp(-0.5 * ((wavelengths - center) / sigma) ** 2)
+        x_bar = (
+            0.362 * np.exp(-0.5 * ((wavelengths - 442.0) / 16.0) ** 2)
+            + 1.056 * np.exp(-0.5 * ((wavelengths - 599.8) / 37.9) ** 2)
+            - 0.065 * np.exp(-0.5 * ((wavelengths - 501.1) / 20.4) ** 2)
+        )
+        y_bar = 0.821 * np.exp(-0.5 * ((wavelengths - 568.8) / 46.9) ** 2) + 0.286 * np.exp(-0.5 * ((wavelengths - 530.9) / 16.3) ** 2)
+        z_bar = 1.217 * np.exp(-0.5 * ((wavelengths - 437.0) / 11.8) ** 2) + 0.681 * np.exp(-0.5 * ((wavelengths - 459.0) / 26.0) ** 2)
+        xyz = np.array([
+            np.trapz(emission * x_bar, wavelengths),
+            np.trapz(emission * y_bar, wavelengths),
+            np.trapz(emission * z_bar, wavelengths),
+        ])
+        chromaticity = xyz[:2] / max(float(np.sum(xyz)), 1e-12)
+
+        spectrum_fig = go.Figure(go.Scatter(x=wavelengths, y=emission, line=dict(color="#9e2f2b", width=3), name="Emisión"))
+        style_demo_figure(spectrum_fig, "Longitud de onda (nm)", "Intensidad relativa", 320)
+        locus_x = [0.174, 0.164, 0.144, 0.091, 0.008, 0.074, 0.230, 0.373, 0.513, 0.627, 0.692, 0.719, 0.735, 0.174]
+        locus_y = [0.005, 0.011, 0.030, 0.133, 0.538, 0.834, 0.754, 0.625, 0.487, 0.373, 0.308, 0.281, 0.265, 0.005]
+        cie_fig = go.Figure()
+        cie_fig.add_trace(go.Scatter(x=locus_x, y=locus_y, mode="lines", fill="toself", fillcolor="rgba(80,120,210,.10)", line=dict(color="#17212b"), name="Locus aproximado"))
+        cie_fig.add_trace(go.Scatter(x=[chromaticity[0]], y=[chromaticity[1]], mode="markers", marker=dict(size=14, color="#9e2f2b"), name="Emisión"))
+        cie_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        style_demo_figure(cie_fig, "x", "y", 320)
+        plots = st.columns(2)
+        plots[0].plotly_chart(spectrum_fig, width="stretch", config={"displaylogo": False})
+        plots[1].plotly_chart(cie_fig, width="stretch", config={"displaylogo": False})
+        st.metric("Coordenadas aproximadas", f"x = {chromaticity[0]:.3f} · y = {chromaticity[1]:.3f}")
+        st.caption("Mueve el centro o ensancha la banda y observa que la cromaticidad depende de toda la distribución espectral.")
+
+
+def colorimetry_demo() -> None:
+    with st.expander("▶ Prueba interactiva · configura una medición colorimétrica"):
+        demo_note("Este ejercicio decide qué condiciones y advertencias corresponden; no calcula valores colorimétricos normativos.")
+        controls = st.columns(3)
+        measurement = controls[0].selectbox("Tipo de medición", ["Reflectancia", "Transmitancia", "Emisión"], key="demo_color_type")
+        illuminant = controls[1].selectbox("Iluminante", ["D65", "D50", "A"], disabled=measurement == "Emisión", key="demo_color_illuminant")
+        observer = controls[2].selectbox("Observador", ["2°", "10°"], key="demo_color_observer")
+        coverage = st.slider("Cobertura medida (nm)", 360, 830, (400, 700), 5, key="demo_color_coverage")
+
+        if coverage[0] <= 380 and coverage[1] >= 780:
+            status, message = "VALID", "La cobertura satisface el intervalo completo usado por el programa."
+            st.success(f"{status} · {message}")
+        elif coverage[0] <= 400 and coverage[1] >= 700:
+            status = "APPROXIMATE"
+            assumption = "intensidad cero" if measurement == "Emisión" else "prolongación de los valores de borde"
+            st.warning(f"{status} · Se requiere {assumption} fuera del intervalo medido.")
+        else:
+            status = "INVALID"
+            st.error("INVALID · La cobertura es insuficiente para esta demostración colorimétrica.")
+
+        if measurement == "Emisión":
+            st.markdown(f"**Ruta aplicada:** emisión × observador {observer} → XYZ relativo → xy / u′v′")
+            st.caption("El iluminante está desactivado porque la emisión es la distribución espectral de la fuente.")
+        else:
+            st.markdown(f"**Ruta aplicada:** iluminante {illuminant} × {measurement.lower()} × observador {observer} → XYZ → Lab / LCh / xy")
+
+
+def quantum_yield_demo() -> None:
+    with st.expander("▶ Prueba interactiva · rendimiento cuántico relativo"):
+        demo_note("Los controles representan dos soluciones medidas bajo condiciones equivalentes.")
+        row_1 = st.columns(3)
+        phi_ref = row_1[0].slider("Φ de referencia", 0.05, 1.00, 0.55, 0.01, key="demo_qy_phi_ref")
+        area_ratio = row_1[1].slider("Ix / Iref", 0.10, 2.50, 1.00, 0.05, key="demo_qy_area")
+        absorbance_sample = row_1[2].slider("Ax", 0.01, 0.30, 0.06, 0.01, key="demo_qy_ax")
+        row_2 = st.columns(3)
+        absorbance_ref = row_2[0].slider("Aref", 0.01, 0.30, 0.06, 0.01, key="demo_qy_aref")
+        n_sample = row_2[1].slider("nx", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nx")
+        n_ref = row_2[2].slider("nref", 1.30, 1.60, 1.33, 0.01, key="demo_qy_nref")
+        absorbed_sample = 1.0 - 10.0 ** (-absorbance_sample)
+        absorbed_ref = 1.0 - 10.0 ** (-absorbance_ref)
+        phi_sample = phi_ref * area_ratio * (absorbed_ref / absorbed_sample) * (n_sample / n_ref) ** 2
+        st.metric("Φ calculado para la muestra", f"{phi_sample:.3f}")
+        if absorbance_sample > 0.10 or absorbance_ref > 0.10:
+            st.warning("Una o ambas absorbancias superan 0,10: aumenta el riesgo de filtro interno y reabsorción.")
+        if phi_sample > 1.0:
+            st.error("El resultado supera 1. Revisa unidades, linealidad, correcciones instrumentales y equivalencia experimental.")
+        st.caption("Prueba a mantener las áreas iguales y cambiar Ax: la solución que absorbió menos puede producir un Φ calculado mayor.")
+
+
+def diagnostics_demo() -> None:
+    with st.expander("▶ Prueba interactiva · diagnóstico de cobertura"):
+        demo_note("El ejemplo reproduce únicamente la regla de cobertura colorimétrica descrita en esta página.")
+        coverage = st.slider("Intervalo realmente medido (nm)", 350, 830, (400, 700), 5, key="demo_diag_coverage")
+        points = st.number_input("Número de puntos válidos", min_value=0, max_value=5000, value=301, step=1, key="demo_diag_points")
+        if points < 2:
+            st.error("INVALID · No hay puntos suficientes para integrar o interpolar.")
+        elif coverage[0] <= 380 and coverage[1] >= 780:
+            st.success("VALID · Cobertura completa entre 380 y 780 nm.")
+        elif coverage[0] <= 400 and coverage[1] >= 700:
+            st.warning("APPROXIMATE · Cobertura mínima aceptada; el resultado debe informar la aproximación.")
+        else:
+            st.error("INVALID · Falta una parte sustancial del intervalo visible requerido.")
+
+
 with st.sidebar:
     st.markdown(f"### {APP_NAME}")
     st.caption(f"Documentación · {APP_VERSION}")
@@ -512,6 +745,7 @@ elif selected == "Visor de espectros":
         "Recorta, interpola solo dentro del dominio medido y aplica las correcciones seleccionadas.",
         "Puedes comparar forma, posición de máximos y áreas; la intensidad absoluta se pierde si normalizas.",
     )
+    viewer_demo()
     method(
         "El visor trabaja únicamente con los puntos medidos dentro del intervalo disponible. "
         "Si el rango solicitado es más amplio que los datos, los extremos no se rellenan ni se extrapolan."
@@ -593,6 +827,7 @@ elif selected == "Análisis de picos":
         "Ajusta varias funciones cuya suma intenta reproducir la señal observada.",
         "Obtienes centros, anchuras y áreas del modelo; una asignación química exige evidencia adicional.",
     )
+    peaks_demo()
     method(
         "La señal se representa como la suma de una línea base y varios perfiles. El programa permite perfiles "
         "Gaussianos, Lorentzianos y pseudo-Voigt, con detección automática por prominencia o centros definidos manualmente."
@@ -676,6 +911,7 @@ elif selected == "Band gap óptico":
         "Convierte energía, aplica la potencia elegida y ajusta una región aproximadamente lineal.",
         "Obtienes un Eg condicionado a la hipótesis y al intervalo; no una identificación automática de la transición.",
     )
+    band_gap_demo()
     method(
         "El programa transforma la señal declarada a una magnitud óptica, construye (αhν)ᵖ frente a hν y extrapola "
         "un intervalo aproximadamente lineal. Para reflectancia difusa utiliza la transformación de Kubelka–Munk."
@@ -768,6 +1004,7 @@ elif selected == "CIE 1931":
         "Integra el espectro con x̄, ȳ y z̄ para calcular X, Y, Z y normalizarlos a x,y.",
         "Puedes describir cromaticidad y, si la geometría lo permite, longitud dominante y pureza; no brillo absoluto.",
     )
+    cie_demo()
     method(
         "El espectro de emisión se integra con las funciones de igualación de color x̄(λ), ȳ(λ) y z̄(λ) para obtener "
         "los valores triestímulo relativos X, Y y Z. Después se calculan x = X/(X+Y+Z) e y = Y/(X+Y+Z)."
@@ -850,6 +1087,7 @@ elif selected == "Colorimetría":
         "Combina las distribuciones espectrales, integra XYZ y convierte a espacios derivados.",
         "Obtienes valores comparables solo si mantienes las mismas condiciones colorimétricas.",
     )
+    colorimetry_demo()
     st.subheader("Configuración según la medición")
     st.markdown(
         """
@@ -940,6 +1178,7 @@ elif selected == "Rendimiento cuántico":
         "Compara áreas, fracciones absorbidas y la corrección n² bajo condiciones equivalentes.",
         "Obtienes un Φ relativo para la solución; no es aplicable a sólidos ni corrige por sí solo efectos experimentales.",
     )
+    quantum_yield_demo()
     method(
         "El rendimiento cuántico de fluorescencia es la relación entre los fotones emitidos y los fotones absorbidos. "
         "El método relativo compara la emisión integrada, la fracción absorbida y el índice de refracción de la muestra "
@@ -1011,6 +1250,7 @@ elif selected == "Datos y diagnósticos":
         "El diagnóstico no califica si el resultado es “bonito” o “feo”; indica si las comprobaciones del programa permiten calcularlo, si depende de una aproximación o si debe rechazarse.",
         "0 0 900 285",
     )
+    diagnostics_demo()
     st.subheader("Archivos de entrada")
     st.markdown(
         """
